@@ -3,6 +3,27 @@
 Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/1.1.0/);
 numerazione [semantica](https://semver.org/lang/it/).
 
+## [1.2.0] — 2026-10-19
+
+### Modificato
+- La lettura dei dati passa dal Mac: il sito del Ministero non risponde ai
+  server di GitHub (robots.txt in timeout), mentre risponde dall'Italia e le
+  sue regole consentono le pagine usate.
+- Il workflow «Pubblica tabellone» non legge più il MIMIT: a ogni commit
+  esegue le prove, controlla gli invarianti dei dati e pubblica il sito.
+
+### Aggiunto
+- Fonte principale: il CSV ufficiale MediaNazionaleAutostradale.csv, con la
+  data esplicita della rilevazione; la pagina HTML resta come riserva.
+- `motore/deposito.py`: lettura e scrittura di data/prezzi.json tramite l'API
+  "contents" di GitHub, con controllo dello sha e nuova lettura in caso di
+  conflitto; token dalla variabile TABELLONE_TOKEN o dal Portachiavi.
+- Opzioni `--github`, `--csv` e `--verifica-github` del motore.
+- `strumenti/macos/installa.sh` e `disinstalla.sh`: LaunchAgent di launchd
+  (9:40, 11:40, 15:10, 19:10 e a ogni accesso), token nel Portachiavi,
+  registro in ~/Library/Logs/TabelloneCarburanti.log.
+- 11 prove nuove (32 in tutto), con il CSV reale del 19/10/2026 fra i campioni.
+
 ## [1.1.1] — 2026-10-19
 
 ### Modificato

@@ -1,137 +1,173 @@
 # Tabellone Carburanti — documentazione tecnica
 
-Versione 1.1.1 · Biagio Raucci · licenza MIT
+Versione 1.2.0 · Biagio Raucci · licenza MIT
 
-Questo documento descrive l'architettura, la lettura dei dati ministeriali
-(con le ragioni di ogni scelta), il funzionamento del tabellone a palette, la
-pubblicazione su GitHub passo passo e la manutenzione.
+Questo documento descrive l'architettura, le fonti e le regole di lettura dei
+dati (con le ragioni di ogni scelta), il tabellone a palette, l'installazione
+passo passo e la manutenzione.
 
 ---
 
 ## 1. Architettura
 
-Il progetto separa nettamente la **lettura dei dati** dalla
-**visualizzazione**, come in una catena CFD si separano solutore e
-post-processore:
+Il lavoro è diviso fra tre attori, ciascuno con un solo compito:
 
 ```mermaid
 flowchart LR
-  A["Pagina MIMIT<br/>Prezzi medi dei carburanti<br/>Autostrade"] --> M
-  M["motore/ (Python)<br/>core.py: lettura e controlli<br/>aggiorna.py: I/O"] --> J["data/prezzi.json"]
-  J --> P["index.html<br/>tabellone a palette"]
-  G["GitHub Actions<br/>ogni mattina"] -. esegue .-> M
-  G -. pubblica .-> W["GitHub Pages"]
+  F["MIMIT<br/>MediaNazionaleAutostradale.csv<br/>(riserva: pagina HTML)"] -->|"lettura dall'Italia"| M
+  M["Mac di casa<br/>launchd, 4 volte al giorno<br/>motore/aggiorna.py --github"] -->|"commit di data/prezzi.json<br/>(API GitHub)"| R["Repository GitHub"]
+  R -->|"ogni commit"| A["GitHub Actions<br/>prove + pubblicazione"]
+  A --> W["GitHub Pages<br/>braucci.github.io/tabellone-carburanti"]
   W --> T["Telefono<br/>(app installata)"]
 ```
 
-- **`motore/core.py`** contiene solo funzioni pure: ricevono testo, restituiscono
-  strutture dati. Nessun accesso alla rete o al disco, quindi ogni funzione è
-  verificabile in isolamento con dati noti.
-- **`motore/aggiorna.py`** fa tutto l'I/O: scarica la pagina (rispettando
-  `robots.txt`), chiama il core, controlla gli invarianti, scrive il JSON in
-  modo atomico.
-- **`index.html`** non elabora nulla: legge `data/prezzi.json` e anima i valori.
-- **GitHub Actions** è un computer che GitHub presta gratuitamente per qualche
-  minuto, secondo un orario: esegue il motore, salva i dati nel repository e
-  pubblica il sito su **GitHub Pages**. Non c'è alcun server da mantenere.
+- **Il Mac legge.** Un *LaunchAgent* (il pianificatore di macOS) esegue il
+  motore più volte al giorno. Il motore scarica le medie ufficiali e, se ci
+  sono dati nuovi, sostituisce `data/prezzi.json` nel repository con un commit.
+- **GitHub pubblica.** Ogni commit sul ramo `main` fa partire il workflow, che
+  esegue le prove, controlla gli invarianti dei dati e rimette online il sito.
+- **Il telefono mostra.** La pagina legge `data/prezzi.json` dalla sua stessa
+  origine e anima le palette; funziona anche offline con l'ultimo dato.
 
-### Perché non leggere il sito MIMIT direttamente dal telefono
+Nel codice la stessa separazione si ritrova fra solutore e post-processore:
+
+- **`motore/core.py`**: solo funzioni pure (ricevono testo, restituiscono
+  strutture dati), verificabili in isolamento;
+- **`motore/aggiorna.py`**: l'I/O, cioè rete con rispetto di `robots.txt`,
+  file locali, riepilogo nel registro;
+- **`motore/deposito.py`**: lettura e scrittura del file nel repository
+  tramite l'API *contents* di GitHub;
+- **`index.html`**: nessuna elaborazione, solo la visualizzazione.
+
+### 1.1 Perché la lettura avviene dal Mac
+
+La prima versione leggeva i dati da GitHub Actions. Il 19/10/2026 la diagnosi
+ha dato questo quadro:
+
+| Verifica | Esito | Conclusione |
+|---|---|---|
+| `robots.txt` del Ministero | `User-agent: *` con divieti solo per le cartelle di sistema di Joomla e per le pagine di ricerca | la pagina delle medie e il CSV **sono consentiti** |
+| Richiesta dal Mac (`curl`) | `200` | dall'Italia il sito risponde |
+| Richiesta dai server di GitHub | nessuna risposta entro il tempo limite | il sito non risponde a quei server |
+
+I server di GitHub stanno in centri di calcolo all'estero; molti siti della
+pubblica amministrazione scartano in silenzio quel traffico. La lettura deve
+quindi partire da una connessione italiana. Le regole del sito restano
+rispettate: il motore legge `robots.txt` prima di ogni richiesta.
+
+### 1.2 Perché il telefono non legge direttamente il sito
 
 Il browser applica la politica della stessa origine (CORS): una pagina
 pubblicata su `braucci.github.io` non può leggere il contenuto di
-`www.mimit.gov.it`, che non lo autorizza. Il dato va quindi prelevato da un
-programma fuori dal browser (il motore, su GitHub Actions) e servito dalla
-stessa origine della pagina. Un vantaggio collaterale: il Ministero riceve due
+`www.mimit.gov.it`, che non lo autorizza. In più il Ministero riceve poche
 richieste al giorno, non una per ogni apertura dell'app.
 
 ---
 
-## 2. La fonte e la lettura dei dati
+## 2. Le fonti e la lettura dei dati
 
-### 2.1 Che cosa pubblica il Ministero
+### 2.1 Fonte principale: il CSV ufficiale
 
-La pagina *Prezzi medi dei carburanti – Autostrade* espone la tabella
-*Media prezzi nazionale – Rete autostradale*:
+Sotto la tabella della pagina *Prezzi medi dei carburanti – Autostrade* c'è il
+link «Media prezzi alle 8 (csv)», che porta a
+`https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv`.
+Il contenuto del 19/10/2026:
 
-| TIPOLOGIA | EROGAZIONE | PREZZO MEDIO |
-|---|---|---|
-| Gasolio | SELF | 2.297 |
-| Benzina | SELF | 2.048 |
-| GPL | SERVITO | 0.901 |
-| Metano | SERVITO | 1.900 |
+```
+Aggiornamento 19-10-2026
+TIPO;TIPOLOGIA;EROGAZIONE;PREZZO MEDIO
+AUTOSTRADALE;Gasolio;SELF;2.297
+AUTOSTRADALE;Benzina;SELF;2.048
+AUTOSTRADALE;GPL;SERVITO;0.901
+AUTOSTRADALE;Metano;SERVITO;1.900
+```
 
-*(valori del 19/10/2026)*
+È la fonte migliore per tre ragioni: è un file pensato per essere scaricato,
+ha una struttura stabile e **dichiara la data della rilevazione**. Il lettore:
 
-Secondo la nota informativa della pagina, le medie sono aritmetiche, calcolate
-sui prezzi in vigore alle 8:00 del giorno stesso; per gasolio e benzina si
-usano i prezzi self service, per GPL e metano quelli del servito. Il tabellone
-riporta **esattamente** queste quattro righe: nessun calcolo, nessuna stima.
+- trova la riga *Aggiornamento* e ne estrae la data (formato `gg-mm-aaaa`);
+- individua le colonne **per nome** e non per posizione, deducendo il
+  separatore dall'intestazione;
+- accetta solo le righe con `TIPO = AUTOSTRADALE`, se la colonna c'è.
 
-**Unità di misura.** I metadati dell'Osservatorio indicano il prezzo al litro
-in tutti i casi tranne il metano, venduto al chilogrammo: il tabellone scrive
-`€/L` per gasolio, benzina e GPL e `€/kg` per il metano. Per il litro si usa
-il simbolo maiuscolo L, ammesso dal Sistema Internazionale accanto alla l
-minuscola, perché nel carattere condensato del tabellone la l minuscola si
-confonde con una I.
+Il tabellone riporta **esattamente** queste quattro righe: nessun calcolo,
+nessuna stima. Secondo la nota informativa della pagina, le medie sono
+aritmetiche e calcolate sui prezzi in vigore alle 8:00 del giorno; per gasolio
+e benzina sui prezzi self service, per GPL e metano su quelli del servito.
 
-### 2.2 Regole di lettura
+### 2.2 Fonte di riserva: la pagina HTML
 
-Il parser non dipende dal markup della pagina: esamina tutte le righe di
-tabella e accetta quelle che soddisfano **contemporaneamente** tre condizioni.
+Se il CSV non è leggibile, il motore legge la tabella
+`TIPOLOGIA | EROGAZIONE | PREZZO MEDIO` della pagina. Il parser non dipende
+dal markup: esamina tutte le righe di tabella e, se non ne trova, ripiega su
+un'espressione regolare sul testo. La pagina però non riporta la data: in quel
+caso si assume la data odierna (prezzi delle 8:00 *del medesimo giorno*) e lo
+si annota con `data_dedotta: true`.
 
-1. **Tipologia** esattamente uguale a *Gasolio*, *Benzina*, *GPL* o *Metano*
-   (maiuscole indifferenti). Restano fuori GNL, L-GNC e i carburanti speciali:
-   una riga *Benzina speciale* non viene confusa con la benzina.
+### 2.3 Regole comuni di accettazione
+
+Una riga, dal CSV o dalla pagina, è accettata solo se soddisfa
+**contemporaneamente** tre condizioni:
+
+1. **Tipologia** esattamente uguale a *Gasolio*, *Benzina*, *GPL* o *Metano*:
+   restano fuori GNL, L-GNC e i carburanti speciali.
 2. **Erogazione** riconoscibile: *SELF*, *Self service*, *self-service*
-   diventano `SELF`; *SERVITO* diventa `SERVITO`. L'erogazione mostrata sul
-   tabellone è quella letta, non una presupposta: se domani il Ministero
-   pubblicasse il gasolio servito, il tabellone lo direbbe.
-3. **Prezzo** plausibile, fra 0,3 e 5 €: scarta errori di lettura come un
-   numero d'anno o un valore con una cifra di troppo.
+   diventano `SELF`; *SERVITO* diventa `SERVITO`. L'erogazione mostrata è
+   quella letta, non una presupposta.
+3. **Prezzo** plausibile, fra 0,3 e 5 €.
 
-Se un carburante compare in più righe vale la prima, nell'ordine della pagina.
-Se la pagina non contiene tabelle, si ripiega su un'espressione regolare sul
-testo. I prezzi sono letti come `Decimal` dalla loro forma testuale, così 2.297
-resta 2,297 e non 2,29699999…
+A parità di carburante vale la prima riga. I prezzi sono letti come `Decimal`
+dalla forma testuale, così 2.297 resta 2,297 e non 2,29699999…
 
-**La data.** Si cerca nel testo la data più recente compresa fra dieci giorni
-fa e oggi (sono quindi ignorate le date di decreti o di aggiornamenti della
-pagina). Se la pagina non ne riporta, si assume la data odierna, coerente con
-la nota informativa (prezzi delle 8:00 *del medesimo giorno*), e lo si annota
-nel JSON con `data_dedotta: true`.
+**Unità di misura.** Prezzo al litro per gasolio, benzina e GPL, al
+chilogrammo per il metano (metadati dell'Osservatorio). Il tabellone scrive
+`€/L`: il simbolo maiuscolo è ammesso dal Sistema Internazionale e nel
+carattere condensato non si confonde con una I.
 
-### 2.3 Pagina non ancora aggiornata
+### 2.4 Fonte non ancora aggiornata
 
-Se il workflow legge la pagina prima che il Ministero l'abbia aggiornata e la
-pagina non riporta una data, si rischierebbe di registrare i valori di ieri
-con la data di oggi. Il motore lo riconosce con questa regola: *se la data è
-dedotta e tutte e quattro le medie coincidono al millesimo con quelle
-dell'ultimo giorno registrato, il nuovo giorno non viene scritto*.
+Il motore gira più volte al giorno, anche prima che il Ministero pubblichi.
+Con il CSV non c'è ambiguità: se riporta ancora la data di ieri, i valori di
+ieri vengono reintegrati identici e non si scrive nulla.
 
-Giustificazione. Siano $q_i$ le probabilità che la media del carburante $i$,
-calcolata su centinaia di impianti, resti invariata al millesimo da un giorno
-all'altro. Trattando i quattro eventi come indipendenti, la probabilità che
-restino tutte ferme è
+Con la pagina HTML, che non ha data, vale questa regola: *se tutte e quattro
+le medie coincidono al millesimo con quelle dell'ultimo giorno registrato, il
+nuovo giorno non viene scritto*. Siano $q_i$ le probabilità che la media del
+carburante $i$ resti invariata al millesimo da un giorno all'altro; trattando
+gli eventi come indipendenti, la probabilità che restino tutte ferme è
 
 $$
-P = \prod_{i=1}^{4} q_i .
+P = \prod_{i=1}^{4} q_i ,
 $$
 
-Anche con una stima generosa $q_i = 0{,}3$ si ottiene $P = 0{,}3^4 \approx
-0{,}008$: meno di un caso su cento. E l'errore residuo è innocuo: in quel caso
-raro il tabellone mostra prezzi comunque corretti (identici), solo con la data
-del giorno prima. La seconda esecuzione delle 13:47 recupera il caso di una
-pubblicazione in ritardo.
+e anche con la stima generosa $q_i = 0{,}3$ si ha $P \approx 0{,}008$. Nel
+raro caso di errore i prezzi mostrati restano corretti; è sbagliata solo la
+data, che risulta quella del giorno prima.
 
-### 2.4 Variazioni
+### 2.5 Variazioni
 
 La colonna *Var.* riporta la differenza, in millesimi di euro, rispetto alla
-rilevazione precedente **dello stesso carburante con la stessa erogazione**:
-un eventuale passaggio da self a servito non è una variazione di prezzo. Le
-differenze sono calcolate in decimale (in virgola mobile 2,297 − 2,298 vale
+rilevazione precedente **dello stesso carburante con la stessa erogazione**.
+Le differenze sono calcolate in decimale (in virgola mobile 2,297 − 2,298 vale
 −0,000999999…) e prima di ogni scrittura si controlla l'invariante
-`prezzo − variazione = prezzo precedente`. La colonna si riempie dalla seconda
-rilevazione in poi.
+`prezzo − variazione = prezzo precedente`.
+
+### 2.6 Scrittura nel repository
+
+`motore/deposito.py` usa due chiamate dell'API REST di GitHub:
+
+1. `GET /repos/braucci/tabellone-carburanti/contents/data/prezzi.json`
+   restituisce il file e il suo **sha**, l'impronta della versione letta;
+2. `PUT` sullo stesso indirizzo invia il nuovo contenuto insieme a quello sha.
+
+Se nel frattempo il file è cambiato, GitHub rifiuta la scrittura (409) invece
+di sovrascrivere: il motore rilegge, ricalcola e riprova una volta. Se i dati
+non cambiano non si scrive nulla, quindi nasce al massimo un commit al giorno.
+
+Il token è *fine-grained*, limitato a questo solo repository e al solo
+permesso **Contents: Read and write**. Sul Mac è conservato nel Portachiavi
+alla voce `tabellone-carburanti`; in alternativa il motore lo legge dalla
+variabile d'ambiente `TABELLONE_TOKEN`.
 
 ---
 
@@ -157,63 +193,49 @@ con $\tau = 62$ ms per passo, circa 16 palette al secondo, valore scelto a
 occhio dello stesso ordine di grandezza dei tabelloni reali. È un motore passo
 passo: la posizione angolare del tamburo è $\theta = k \cdot 2\pi/N$.
 
-Esempi, partendo dalla paletta vuota (indice 0):
-
-| Carattere | Indice $j$ | Passi | Tempo |
+| Carattere | Indice $j$ | Passi dalla paletta vuota | Tempo |
 |---|---|---|---|
 | G | 7 | 7 | 0,43 s |
 | S | 19 | 19 | 1,18 s |
 | 0 | 27 | 27 | 1,67 s |
 | 9 | 36 | 36 | 2,23 s |
 
-Le cifre stanno dopo le lettere nel tamburo: per questo i nomi dei carburanti
-si fermano per primi e **il prezzo si compone per ultimo**, senza bisogno di
-ritardi artificiali. Ai passi si sommano piccoli ritardi d'avvio, per riga e
-per colonna, con una componente casuale, così le celle non scattano tutte
-insieme: l'intero tabellone si assesta in circa 3,5 s. Il pulsante *Rigira le
-palette* aggiunge un giro completo ($N$ passi in più) a ogni cella.
+Le cifre stanno dopo le lettere nel tamburo: i nomi dei carburanti si fermano
+per primi e **il prezzo si compone per ultimo**, senza ritardi artificiali.
+L'intero tabellone si assesta in circa 3,5 s. Il pulsante *Rigira le palette*
+aggiunge un giro completo a ogni cella.
 
 L'animazione è guidata dal tempo, non dai fotogrammi: un solo ciclo
 `requestAnimationFrame` calcola per ogni cella il passo in corso,
-$\lfloor (t - t_0)/\tau \rfloor$, e la fase dentro il passo. Il risultato è
-identico su schermi a 60 e a 120 Hz.
+$\lfloor (t - t_0)/\tau \rfloor$, e la fase dentro il passo, con lo stesso
+risultato a 60 e a 120 Hz.
 
 ### 3.2 Il singolo passo
 
-Ogni cella è fatta di quattro metà: due fisse e due mobili (le "ante").
-
-1. Nella prima metà del passo l'anta alta, con il carattere vecchio, ruota da
-   $0°$ a $-90°$ attorno alla cerniera, scoprendo la metà alta del carattere
-   nuovo. Il moto è accelerato (angolo proporzionale al quadrato del tempo),
-   come una lamina che cade per gravità.
-2. Nella seconda metà l'anta bassa, con il carattere nuovo, ruota da $90°$ a
-   $0°$ e copre la metà bassa vecchia, con un leggero rimbalzo finale.
-
-Per una lamina rigida incernierata a un lato, di lunghezza $L$, il momento
-d'inerzia del second'ordine rispetto alla cerniera è $I = mL^2/3$ e il momento
-della forza peso è $mg\,(L/2)\sin\theta$, quindi
+Ogni cella è fatta di quattro metà, due fisse e due mobili (le "ante"). Nella
+prima metà del passo l'anta alta, con il carattere vecchio, ruota da $0°$ a
+$-90°$ con moto accelerato; nella seconda l'anta bassa, con il carattere
+nuovo, ruota da $90°$ a $0°$ con un leggero rimbalzo. Per una lamina rigida
+incernierata a un lato, di lunghezza $L$, il momento d'inerzia del
+second'ordine rispetto alla cerniera è $I = mL^2/3$ e il momento della forza
+peso è $mg\,(L/2)\sin\theta$, quindi
 
 $$
 \ddot\theta = \frac{3g}{2L}\sin\theta ,
 $$
 
-accelerazione angolare nulla all'avvio e massima in orizzontale: è la forma
-che la legge quadratica approssima.
+accelerazione nulla all'avvio e massima in orizzontale: la legge quadratica
+dell'animazione ne approssima la forma.
 
-### 3.3 La targa
+### 3.3 La targa e l'accessibilità
 
-In fondo alla cassa una targhetta in alluminio spazzolato con due viti porta
-il nome **Biagio Raucci**, come la targa *Solari Udine* fissata sui tabelloni
-veri. Lo stesso nome chiude il messaggio della riga LED.
-
-### 3.4 Accessibilità e risparmio
-
-- Con *riduci movimento* attivo nel sistema, le palette si posizionano senza
-  animazione e la riga LED non scorre.
-- Ogni riga ha un'etichetta per i lettori di schermo («gasolio, self: 2,297
-  euro al litro, rilevazione del 19/10/2026»).
-- Il suono delle palette è spento all'avvio (i browser lo consentono solo dopo
-  un tocco) e si attiva con il pulsante *Suono*.
+- In fondo alla cassa una targhetta in alluminio spazzolato porta il nome
+  **Biagio Raucci**, come la targa *Solari Udine* dei tabelloni veri; lo stesso
+  nome chiude la riga LED.
+- Con *riduci movimento* attivo, le palette si posizionano senza animazione e
+  la riga LED non scorre.
+- Ogni riga ha un'etichetta per i lettori di schermo.
+- Il suono delle palette si attiva con il pulsante *Suono*.
 - Se la scheda torna in primo piano dopo più di 30 minuti, i dati vengono
   ricaricati e girano solo le celle cambiate.
 
@@ -223,21 +245,24 @@ veri. Lo stesso nome chiude il messaggio della riga LED.
 
 ```
 tabellone-carburanti/
-├── index.html                 tabellone: pagina, stile, animazione
-├── sw.js                      service worker: offline e cache
-├── manifest.webmanifest       installazione come app
-├── icone/                     icone dell'app (192, 512, maskable, iOS)
-├── data/prezzi.json           dati pubblicati, scritti dal motore
+├── index.html                   tabellone: pagina, stile, animazione
+├── sw.js                        service worker: offline e cache
+├── manifest.webmanifest         installazione come app
+├── icone/                       icone dell'app
+├── data/prezzi.json             dati pubblicati (li scrive il Mac)
 ├── motore/
-│   ├── __init__.py            numero di versione
-│   ├── core.py                lettura della pagina, storico, invarianti
-│   ├── aggiorna.py            I/O: rete, robots.txt, scrittura atomica
-│   ├── test_core.py           21 prove automatiche
-│   └── campioni/              pagina di prova modellata su quella reale
-├── strumenti/genera_icone.py  rigenera le icone (serve Pillow)
-├── .github/workflows/aggiorna.yml
-├── verifica.sh                prove locali e server di anteprima
-├── docs/tabellone.png         immagine per il README
+│   ├── core.py                  lettura di CSV e pagina, storico, invarianti
+│   ├── aggiorna.py              I/O: rete, robots.txt, file, registro
+│   ├── deposito.py              lettura e scrittura nel repository GitHub
+│   ├── test_core.py             32 prove automatiche
+│   └── campioni/                CSV reale del 19/10/2026 e pagina di prova
+├── strumenti/
+│   ├── macos/installa.sh        installa l'aggiornamento automatico sul Mac
+│   ├── macos/disinstalla.sh     lo rimuove
+│   └── genera_icone.py          rigenera le icone (serve Pillow)
+├── .github/workflows/aggiorna.yml   prove e pubblicazione su GitHub Pages
+├── verifica.sh                  prove locali e server di anteprima
+├── docs/tabellone.png           immagine per il README
 ├── pyproject.toml  CHANGELOG.md  LICENSE  .gitignore
 └── README.md  README-progetto.md
 ```
@@ -248,133 +273,136 @@ tabellone-carburanti/
 |---|---|
 | `schema` | versione del formato (2) |
 | `generato_il` | istante della lettura, ora di Roma |
-| `fonte` | indirizzo, esito (`ok`, `pagina invariata rispetto al …`), data letta, `data_dedotta` |
+| `fonte` | indirizzo, formato (`csv` o `html`), esito, data letta, `data_dedotta` |
 | `rilevazione` | data più recente presente sul tabellone |
-| `tabellone` | quattro righe nell'ordine della pagina: `carburante`, `erogazione`, `prezzo`, `unita`, `data`, `variazione`, `data_precedente` |
+| `tabellone` | quattro righe: `carburante`, `erogazione`, `prezzo`, `unita`, `data`, `variazione`, `data_precedente` |
 | `storico` | per ogni giorno e carburante, `erogazione` e `prezzo` come pubblicati; 400 giorni |
 
-Il file iniziale contiene i valori pubblicati dal Ministero il 19/10/2026; le
-variazioni compaiono dalla prima esecuzione automatica del giorno dopo.
-
 ---
 
-## 5. Pubblicazione su GitHub, passo passo
+## 5. Messa in funzione, passo passo
 
-Si usa solo il browser. Servono un account GitHub (`braucci`) e la cartella
-del progetto decompressa sul computer.
+### 5.1 Aggiornare il workflow su GitHub
 
-### 5.1 Creare il repository
+Il file `.github/workflows/aggiorna.yml` non si può caricare trascinandolo
+(GitHub rifiuta i file nascosti): si modifica nel browser.
 
-1. Su <https://github.com/new>: nome **`tabellone-carburanti`**, visibilità
-   **Public** (GitHub Pages gratuito richiede un repository pubblico), nessun
-   README, nessuna licenza, nessun `.gitignore` (li abbiamo già).
-2. *Create repository*.
+1. Nel repository apri `.github` → `workflows` → `aggiorna.yml`.
+2. Premi l'icona a matita (*Edit this file*).
+3. Seleziona tutto il testo, cancellalo e incolla il nuovo contenuto.
+4. *Commit changes…* → *Commit changes*.
 
-### 5.2 Caricare i file
+### 5.2 Caricare il resto dei file
 
-1. Nella pagina del repository vuoto: *uploading an existing file*.
-2. Trascina nella finestra **tutti i file e le cartelle** del progetto.
-3. *Commit changes*.
+Trascina nel repository, con *Add file → Upload files*, la cartella `motore`,
+la cartella `strumenti` e i file `index.html`, `sw.js`, `pyproject.toml`,
+`CHANGELOG.md`, `README.md`, `README-progetto.md`.
 
-> **Attenzione alle cartelle nascoste.** `.github` e `.gitignore` iniziano
-> con un punto: GNOME Files (Nautilus) non le mostra finché non premi
-> **Ctrl+H**, e alcuni browser le saltano nel trascinamento. Dopo il caricamento
-> controlla che nel repository compaiano `.gitignore` e
-> `.github/workflows/aggiorna.yml`. Se mancano:
->
-> - *Add file → Create new file*;
-> - come nome scrivi `.github/workflows/aggiorna.yml` (le barre creano le
->   cartelle);
-> - incolla il contenuto del file dal computer e *Commit changes*.
->
-> Stesso procedimento per `.gitignore`.
+**Non caricare mai la cartella `data`**: il file dei prezzi lo scrive il Mac, e
+ricaricarlo cancellerebbe lo storico.
 
-### 5.3 Attivare GitHub Pages
+### 5.3 Creare il token GitHub
 
-*Settings → Pages → Build and deployment → Source:* **GitHub Actions**.
+1. Su GitHub: foto del profilo in alto a destra → **Settings** →
+   **Developer settings** (in fondo alla colonna di sinistra) →
+   **Personal access tokens** → **Fine-grained tokens** →
+   **Generate new token**.
+2. *Token name*: `Tabellone Carburanti (Mac)`. *Expiration*: un anno.
+3. *Repository access*: **Only select repositories** →
+   `braucci/tabellone-carburanti`.
+4. *Permissions* → *Repository permissions*: **Contents** →
+   **Read and write**. (*Metadata: Read-only* si aggiunge da solo.)
+5. **Generate token** e copia il token, che inizia con `github_pat_`.
+   GitHub lo mostra **una sola volta**: tienilo negli appunti per il passo
+   successivo.
 
-### 5.4 Permessi del workflow
+### 5.4 Installare l'aggiornamento automatico sul Mac
 
-*Settings → Actions → General → Workflow permissions:* **Read and write
-permissions** → *Save*. Serve perché il workflow salva i nuovi prezzi nel
-repository.
+1. Scarica e decomprimi lo zip del progetto (doppio clic nella cartella
+   Download).
+2. Apri il **Terminale** e scrivi:
 
-### 5.5 Prima esecuzione
-
-1. Scheda **Actions** → *Aggiorna tabellone* → **Run workflow** → *Run workflow*.
-2. Dopo un paio di minuti apri l'esecuzione e il passaggio *Acquisisci i prezzi
-   dal MIMIT*. Il riepilogo atteso ha questa forma:
-
-   ```
-   Tabellone Carburanti 1.1.0 — 20/10/2026 10:47
-    • pagina MIMIT letta: 20/10/2026 (data non indicata: si assume oggi)
-        GASOLIO  SELF     2.xxx €/l
-        BENZINA  SELF     2.xxx €/l
-        GPL      SERVITO  0.xxx €/l
-        METANO   SERVITO  1.xxx €/kg
-   Scritto data/prezzi.json
+   ```bash
+   cd ~/Downloads/tabellone-carburanti
+   bash strumenti/macos/installa.sh
    ```
 
-3. L'indirizzo del sito compare nel passaggio *Pubblica su GitHub Pages*:
-   `https://braucci.github.io/tabellone-carburanti/`.
+   Se macOS chiede se il Terminale può accedere alla cartella Download,
+   rispondi *OK*.
+3. Lo script esegue sei controlli e si ferma con una spiegazione se uno non
+   passa:
+   1. trova un Python 3.10 o successivo;
+   2. verifica che Python apra connessioni HTTPS (con il Python di python.org
+      a volte mancano i certificati: lo script indica il comando che li
+      installa);
+   3. copia il motore in `~/Library/Application Support/TabelloneCarburanti`
+      ed esegue le prove. Si usa quella cartella perché macOS non lascia
+      leggere Scrivania, Documenti e Download ai programmi che partono da soli;
+   4. chiede il token e lo salva nel **Portachiavi**: incollalo, premi Invio,
+      incollalo di nuovo e premi Invio. Mentre lo incolli non compare nulla:
+      è normale. Poi verifica che il token legga il repository;
+   5. installa il LaunchAgent: ogni giorno alle 9:40, 11:40, 15:10 e 19:10, e
+      a ogni accesso al Mac;
+   6. esegue subito una prima lettura e ne mostra il registro.
 
-Da quel momento il workflow parte da solo alle 8:47 e alle 11:47 UTC, e a ogni
-caricamento di file sul ramo `main`.
+Se a un'ora prevista il Mac dorme, launchd esegue il lavoro al risveglio; se è
+spento, se ne occupa l'esecuzione all'accesso successivo.
 
-### 5.6 Installare sul telefono
+### 5.5 Controllare che funzioni
 
-- **Android (Chrome):** apri l'indirizzo → menu ⋮ → *Installa app*.
-- **iPhone (Safari):** apri l'indirizzo → Condividi → *Aggiungi alla schermata
-  Home*.
+- **Sul Mac**, il registro:
 
-L'app si apre a schermo intero, come un'app nativa, e funziona offline con
-l'ultimo dato scaricato (la riga LED lo segnala).
+  ```bash
+  tail -n 30 ~/Library/Logs/TabelloneCarburanti.log
+  ```
 
-### 5.7 Se qualcosa non va
+  oppure l'app *Console*, alla voce *Log report*. Per un'esecuzione manuale:
 
-| Sintomo nel log | Causa e rimedio |
+  ```bash
+  launchctl kickstart -k gui/$(id -u)/it.raucci.tabellone-carburanti
+  ```
+
+- **Su GitHub**: nella scheda *Code* compare un commit «Prezzi del gg/mm/aaaa»
+  e nella scheda *Actions* un'esecuzione verde di «Pubblica tabellone».
+- **Sul telefono**: <https://braucci.github.io/tabellone-carburanti/>.
+  Android (Chrome): menu ⋮ → *Installa app*; iPhone (Safari): Condividi →
+  *Aggiungi alla schermata Home*.
+
+### 5.6 Se qualcosa non va
+
+| Messaggio nel registro del Mac | Causa e rimedio |
 |---|---|
-| *Archivia i dati*: `403` su `git push` | Permessi del workflow: punto 5.4. |
-| *Pubblica*: `Pages site not found` o errore d'ambiente | Pages non attivo: punto 5.3. |
-| `pagina MIMIT: saltata: robots.txt …` | Il sito vieta la lettura automatica di quella pagina; il motore lo rispetta e il tabellone mostra l'ultimo dato archiviato. |
-| `nessuna riga riconosciuta` | È cambiata la struttura della pagina: va adeguata `leggi_pagina_ufficiale` in `core.py`. |
-| `errore: HTTPError 403` | Il sito rifiuta le richieste dai server di GitHub; il tabellone continua a mostrare l'ultimo dato. |
-| `pagina probabilmente non ancora aggiornata` | Normale alle 10:47 se il Ministero pubblica tardi: ci pensa l'esecuzione delle 13:47. |
-| Il workflow non parte più da solo | GitHub sospende le esecuzioni pianificate dei repository pubblici senza attività per 60 giorni: *Actions → Aggiorna tabellone → Enable workflow*. Gli aggiornamenti quotidiani dei dati normalmente lo evitano. |
+| `token non valido o scaduto` | Genera un nuovo token (5.3) e rilancia `bash strumenti/macos/installa.sh --nuovo-token`. |
+| `il token non ha il permesso necessario` | Nel token manca *Contents: Read and write*. |
+| `repository non trovato` | Il token non è abilitato al repository: *Only select repositories* (5.3, punto 3). |
+| `CSV MIMIT: errore …` e poi `pagina MIMIT letto` | Il CSV non era leggibile, è stata usata la pagina: nessuna azione. |
+| `Nessuna fonte disponibile` | Il Mac non raggiunge il sito del Ministero: controlla la connessione. |
+| `fonte probabilmente non ancora aggiornata` | Normale al mattino presto: ci pensa l'esecuzione successiva. |
 
-Le esecuzioni pianificate di GitHub possono partire con qualche minuto di
-ritardo nelle ore di traffico: è normale.
+| Sintomo su GitHub | Causa e rimedio |
+|---|---|
+| *Prova il motore* rossa | Il codice caricato non supera le prove: rimanda il registro dell'esecuzione. |
+| *Controlla i dati da pubblicare* rossa | `data/prezzi.json` non rispetta gli invarianti: il sito resta alla versione precedente. |
+| *Pubblica*: `Pages site not found` | *Settings → Pages → Source: GitHub Actions*. |
 
 ---
 
-## 6. Prova in locale (Arch Linux)
+## 6. Prova in locale
 
-Python è già presente su Arch (`python --version`, almeno 3.10). Dalla cartella
-del progetto:
-
-```bash
-./verifica.sh
-```
-
-esegue le 21 prove, una lettura completa della pagina di prova e il controllo
-di manifest e dati. Per vedere il tabellone sul telefono senza pubblicarlo:
+Dalla cartella del progetto, su Linux o sul Mac:
 
 ```bash
-./verifica.sh --servi
+./verifica.sh            # 32 prove, lettura del CSV di prova, controllo dei dati
+./verifica.sh --servi    # e poi anteprima su http://<ip-del-computer>:8000
 ```
 
-e apri dal telefono, collegato alla stessa rete Wi-Fi, l'indirizzo stampato
-(`http://192.168.x.y:8000`). Se il PC ha un firewall attivo, apri la porta:
+Per vedere l'anteprima sul telefono, collegalo alla stessa rete Wi-Fi. Su Arch
+con un firewall attivo apri la porta (`sudo ufw allow 8000/tcp` oppure
+`sudo firewall-cmd --add-port=8000/tcp`). Su indirizzi `http://` diversi da
+`localhost` il browser non attiva il service worker: l'anteprima funziona,
+senza modalità offline.
 
-```bash
-sudo ufw allow 8000/tcp                                   # se usi ufw
-sudo firewall-cmd --add-port=8000/tcp                     # se usi firewalld
-```
-
-Su indirizzi `http://` diversi da `localhost` il browser non attiva il service
-worker (richiede HTTPS): l'anteprima funziona, solo senza modalità offline.
-
-Per eseguire il motore vero, con la rete:
+Il motore si può anche eseguire a mano, su un file locale:
 
 ```bash
 python3 -m motore.aggiorna --json data/prezzi.json
@@ -386,51 +414,69 @@ python3 -m motore.aggiorna --json data/prezzi.json
 
 **Verificato prima della consegna**
 
-- La struttura della tabella e i valori del 19/10/2026, dallo screenshot della
-  pagina ministeriale: la pagina di prova in `motore/campioni` la riproduce.
-- 21 prove automatiche: lettura dei quattro carburanti con l'erogazione
-  pubblicata, ordine della pagina, data assente o presente, esclusione di
-  script, carburanti speciali e prezzi implausibili, ripiego testuale,
-  idempotenza dello storico, variazioni solo a parità di erogazione,
-  riconoscimento della pagina non aggiornata, invarianti, regole RFC 9309 di
-  `robots.txt`, tre esecuzioni consecutive del motore, coerenza del numero di
-  versione nei quattro file.
-- Resa grafica a 320, 390 e 430 pixel di larghezza con i caratteri definitivi:
-  nessuno scorrimento orizzontale, nessun carattere tagliato nelle palette,
-  nessun errore in console; funzionamento offline con il service worker.
+- Il formato reale del CSV ministeriale del 19/10/2026: il file è tra i
+  campioni delle prove.
+- Le regole di `robots.txt` del sito e la raggiungibilità dal Mac (`curl`:
+  `200`); la mancata risposta ai server di GitHub, dal registro del workflow.
+- 32 prove automatiche: lettura del CSV reale, colonne per nome, righe non
+  autostradali escluse, data assente o futura, date con i trattini; pagina
+  HTML con e senza data, script e carburanti speciali esclusi, ripiego
+  testuale; passaggio dal CSV alla pagina se il CSV non è leggibile; storico,
+  variazioni, fonte non aggiornata, invarianti; robots.txt secondo la RFC 9309
+  e diagnostica nel registro; scrittura su GitHub simulata (prima scrittura,
+  nessun commit a dati invariati, conflitto con rilettura, token rifiutato,
+  verifica in sola lettura); coerenza della versione nei quattro file.
+- Il motore copiato da solo in una cartella, come fa l'installatore, supera le
+  prove.
+- La sintassi degli script e il file `.plist` generato.
 
 **Non verificato**
 
-- Il sorgente HTML reale della pagina (è stata vista la pagina resa dal
-  browser, non il codice): il parser non dipende dal markup, ma la prima
-  esecuzione su GitHub Actions è la prova definitiva.
-- Se la pagina riporta da qualche parte la data della rilevazione: in caso
-  contrario vale la regola del paragrafo 2.2.
-- Le regole di `robots.txt` del sito ministeriale per questo programma,
-  l'esecuzione del workflow su GitHub e l'installazione sui telefoni.
+- L'installatore e il LaunchAgent su un Mac reale: li ho scritti per il bash
+  3.2 di macOS e ne ho controllato la sintassi, ma non li ho potuti eseguire.
+- Le chiamate all'API di GitHub con un token reale: sono provate contro una
+  simulazione fedele dell'API *contents*. La prima esecuzione sul Mac è la
+  prova definitiva, e il registro la racconta passo per passo.
 
 ---
 
 ## 8. Manutenzione
+
+### Aggiornare il motore sul Mac
+
+Il Mac usa la copia del motore in `~/Library/Application Support`. Dopo ogni
+nuova versione, rilancia `bash strumenti/macos/installa.sh` dalla cartella del
+progetto: ricopia il motore e riattiva la pianificazione, mentre il token resta
+nel Portachiavi.
 
 ### Nuova versione
 
 Il numero di versione compare in quattro file, e la prova
 `test_versione_unica` fallisce se non coincidono:
 
-1. `pyproject.toml` → `version = "1.2.0"`
-2. `motore/__init__.py` → `__version__ = "1.2.0"`
-3. `index.html` → `const VERSIONE = '1.2.0';`
-4. `sw.js` → `const VERSIONE = '1.2.0';` (cambiarlo rinnova la cache sui
-   telefoni, che così scaricano la pagina nuova)
+1. `pyproject.toml` → `version = "1.3.0"`
+2. `motore/__init__.py` → `__version__ = "1.3.0"`
+3. `index.html` → `const VERSIONE = '1.3.0';`
+4. `sw.js` → `const VERSIONE = '1.3.0';` (rinnova la cache sui telefoni)
 
-Poi una voce in `CHANGELOG.md`, `./verifica.sh`, e caricamento su GitHub.
+Poi una voce in `CHANGELOG.md`, `./verifica.sh`, caricamento su GitHub e
+reinstallazione sul Mac.
+
+### Rimuovere l'aggiornamento automatico
+
+```bash
+bash strumenti/macos/disinstalla.sh
+```
+
+Lo script ferma il LaunchAgent, cancella la copia del motore e chiede se
+cancellare anche il token dal Portachiavi. Se il token non serve più,
+revocalo anche su GitHub (*Fine-grained tokens* → *Delete*).
 
 ### Icone
 
 ```bash
-sudo pacman -S python-pillow
-python3 strumenti/genera_icone.py ~/Scaricati/BarlowCondensed-SemiBold.ttf
+python3 -m pip install pillow         # su Arch: sudo pacman -S python-pillow
+python3 strumenti/genera_icone.py ~/Downloads/BarlowCondensed-SemiBold.ttf
 ```
 
 ### Licenze

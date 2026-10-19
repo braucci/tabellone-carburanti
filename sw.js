@@ -9,7 +9,7 @@
  * Autore: Biagio Raucci — Licenza MIT.
  */
 'use strict';
-const VERSIONE = '1.1.1';
+const VERSIONE = '1.2.0';
 const CACHE = `tabellone-${VERSIONE}`;
 const GUSCIO = [
   './',

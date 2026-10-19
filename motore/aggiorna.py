@@ -1,13 +1,24 @@
 """Tabellone Carburanti — aggiornamento di data/prezzi.json (strato di I/O).
 
-Uso tipico (è ciò che esegue GitHub Actions ogni mattina):
+Uso tipico, sul Mac (è ciò che esegue launchd più volte al giorno):
+
+    python3 -m motore.aggiorna --github braucci/tabellone-carburanti
+
+legge le medie ufficiali MIMIT e, se ci sono dati nuovi, sostituisce
+data/prezzi.json nel repository con un commit; il commit fa ripartire il
+workflow di GitHub che pubblica il sito.
+
+Uso locale, su un file:
 
     python3 -m motore.aggiorna --json data/prezzi.json
 
-Prova senza rete, con una pagina salvata in locale:
+Prova senza rete, con i campioni:
 
     python3 -m motore.aggiorna --json /tmp/prova.json \\
-        --pagina motore/campioni/pagina_autostrade.html --oggi 2026-10-19
+        --csv motore/campioni/MediaNazionaleAutostradale.csv --oggi 2026-10-19
+
+Fonti, in ordine: il CSV ufficiale MediaNazionaleAutostradale.csv, poi la
+pagina HTML delle medie autostradali come riserva.
 
 Comportamento in rete
 ---------------------
@@ -15,11 +26,11 @@ Comportamento in rete
 * rispetto di robots.txt secondo RFC 9309: un robots.txt assente (4xx)
   consente l'accesso, uno irraggiungibile (5xx o rete) lo vieta;
 * tre tentativi con attesa crescente sugli errori transitori;
-* una sola richiesta alla pagina per esecuzione.
+* una richiesta per fonte e per esecuzione.
 
-Codici d'uscita: 0 se la pagina è stata letta (anche se non ancora
-aggiornata), 1 se non è stato possibile leggerla, 2 se il JSON prodotto viola
-un invariante (il file precedente resta intatto).
+Codici d'uscita: 0 se una fonte è stata letta (anche se non ancora
+aggiornata), 1 se nessuna fonte o GitHub non sono raggiungibili, 2 se il JSON
+prodotto viola un invariante (i dati pubblicati restano intatti).
 
 Autore: Biagio Raucci — Licenza MIT.
 """
@@ -42,11 +53,13 @@ from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 from zoneinfo import ZoneInfo
 
-from . import __version__, core
+from . import __version__, core, deposito
 
 ROMA = ZoneInfo("Europe/Rome")
 
+URL_CSV = "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv"
 URL_PAGINA = "https://www.mimit.gov.it/it/prezzo-medio-carburanti/autostrade"
+PERCORSO_DATI = "data/prezzi.json"
 URL_PROGETTO = "https://github.com/braucci/tabellone-carburanti"
 
 AGENTE = f"TabelloneCarburanti/{__version__} (+{URL_PROGETTO})"
@@ -151,20 +164,30 @@ def scarica(url: str, tentativi: int = 3) -> bytes:
 # File
 # ---------------------------------------------------------------------------
 
-def carica_json(percorso: Path) -> dict | None:
-    try:
-        dati = json.loads(percorso.read_text(encoding="utf-8"))
-    except FileNotFoundError:
+def da_testo(testo: str | None) -> dict | None:
+    if not testo:
         return None
+    dati = json.loads(testo)
     # Uno storico in un formato precedente non è riutilizzabile: si riparte.
     return dati if dati.get("schema") == core.SCHEMA else None
+
+
+def carica_json(percorso: Path) -> dict | None:
+    try:
+        return da_testo(percorso.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+
+
+def in_testo(dati: dict) -> str:
+    return json.dumps(dati, ensure_ascii=False, indent=1) + "\n"
 
 
 def scrivi_atomico(percorso: Path, dati: dict) -> None:
     """Scrive su un file temporaneo e poi lo rinomina: un'interruzione a metà
     non lascia mai un JSON troncato."""
     percorso.parent.mkdir(parents=True, exist_ok=True)
-    testo = json.dumps(dati, ensure_ascii=False, indent=1) + "\n"
+    testo = in_testo(dati)
     fd, tmp = tempfile.mkstemp(dir=percorso.parent, prefix=".prezzi-", suffix=".json")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -179,72 +202,138 @@ def scrivi_atomico(percorso: Path, dati: dict) -> None:
 # Programma
 # ---------------------------------------------------------------------------
 
+def _spiega_robots(url: str) -> None:
+    r = robots_di(url)
+    print(f"   robots.txt: {r.stato}; agente: {AGENTE}")
+    if r.direttive:
+        print("   direttive di robots.txt (senza commenti):")
+        for riga in r.direttive[:80]:
+            print(f"     {riga}")
+
+
+def acquisisci(args, oggi: date) -> tuple[core.RisultatoUfficiale, dict] | None:
+    """Prova le fonti in ordine: CSV ufficiale, poi pagina HTML. Con file locali
+    (--csv, --pagina) usa solo quelli. Restituisce (risultato, fonte) o None."""
+    if args.csv or args.pagina:
+        fonti = [(f, "csv" if f is args.csv else "html", str(f)) for f in (args.csv, args.pagina) if f]
+    else:
+        fonti = [(None, "csv", URL_CSV), (None, "html", URL_PAGINA)]
+    for locale, formato, indirizzo in fonti:
+        nome = "CSV MIMIT" if formato == "csv" else "pagina MIMIT"
+        try:
+            dati = locale.read_bytes() if locale else scarica(indirizzo)
+            leggi = core.leggi_csv_ufficiale if formato == "csv" else core.leggi_pagina_ufficiale
+            ris = leggi(dati, oggi)
+        except Exception as e:  # noqa: BLE001 — l'errore va riportato nel log, non propagato
+            vietato = isinstance(e, Vietato)
+            print(f" • {nome}: {'saltata' if vietato else 'errore'}: "
+                  f"{e if vietato else f'{type(e).__name__}: {e}'}")
+            if vietato and not locale:
+                _spiega_robots(indirizzo)
+            continue
+        if not ris.voci:
+            print(f" • {nome}: nessuna riga riconosciuta (TIPOLOGIA | EROGAZIONE | PREZZO MEDIO)")
+            continue
+        nota = " (data non indicata: si assume oggi)" if ris.data_dedotta else ""
+        print(f" • {nome} letto: rilevazione del {ris.data:%d/%m/%Y}{nota}")
+        for c in core.CARBURANTI:
+            v = ris.voci.get(c)
+            print(f"     {core.NOMI[c]:<8} {v['erogazione']:<8} {v['prezzo']:.3f} {core.UNITA[c]}" if v
+                  else f"     {core.NOMI[c]:<8} assente")
+        return ris, {"url": indirizzo, "formato": formato}
+    return None
+
+
+def nuovi_dati(precedente: dict | None, ris: core.RisultatoUfficiale, fonte: dict,
+               adesso: datetime) -> dict:
+    storico = dict(precedente.get("storico", {})) if precedente else {}
+    fonte = dict(fonte)
+    invariata = core.pagina_invariata(storico, ris)
+    if invariata:
+        print(f" • valori identici a quelli del {invariata}: fonte probabilmente non ancora aggiornata,"
+              " nessun nuovo giorno registrato.")
+        fonte.update(esito=f"invariata rispetto al {invariata}")
+    else:
+        core.integra(storico, ris.data, ris.voci)
+        fonte.update(esito="ok", data=ris.data.isoformat(), data_dedotta=ris.data_dedotta)
+    storico = core.pota(storico, adesso.date())
+    return core.componi(storico, fonte, adesso, __version__)
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Aggiorna data/prezzi.json dalla pagina MIMIT.")
-    ap.add_argument("--json", type=Path, default=Path("data/prezzi.json"))
+    ap = argparse.ArgumentParser(description="Aggiorna data/prezzi.json dai dati ufficiali MIMIT.")
+    ap.add_argument("--json", type=Path, default=Path(PERCORSO_DATI),
+                    help="file locale da aggiornare (ignorato con --github)")
+    ap.add_argument("--github", metavar="PROPRIETARIO/REPO",
+                    help="legge e scrive data/prezzi.json direttamente nel repository GitHub")
+    ap.add_argument("--csv", type=Path, help="CSV MIMIT salvato in locale (salta la rete)")
     ap.add_argument("--pagina", type=Path, help="pagina HTML salvata in locale (salta la rete)")
     ap.add_argument("--oggi", type=date.fromisoformat, help="data odierna (per le prove)")
+    ap.add_argument("--verifica-github", action="store_true",
+                    help="controlla solo che il token legga i dati del repository, senza scrivere nulla")
     args = ap.parse_args(argv)
+
+    if args.verifica_github:
+        if not args.github:
+            ap.error("--verifica-github richiede --github PROPRIETARIO/REPO")
+        try:
+            testo, _ = deposito.leggi(args.github, PERCORSO_DATI, deposito.token())
+        except (deposito.ErroreGitHub, urllib.error.URLError, OSError) as e:
+            print(f"GitHub: {e}")
+            return 1
+        dati = da_testo(testo)
+        quando = dati["rilevazione"] if dati else "nessun dato ancora pubblicato"
+        print(f"GitHub: accesso a {args.github} riuscito (rilevazione pubblicata: {quando}).")
+        return 0
 
     adesso = datetime.now(ROMA)
     if args.oggi:
         adesso = datetime.combine(args.oggi, adesso.time(), ROMA)
-    oggi = adesso.date()
-
-    precedente = carica_json(args.json)
-    storico: dict = dict(precedente.get("storico", {})) if precedente else {}
-    fonte: dict = {"url": URL_PAGINA}
-
     print(f"Tabellone Carburanti {__version__} — {adesso:%d/%m/%Y %H:%M}")
+
+    acquisito = acquisisci(args, adesso.date())
+    if acquisito is None:
+        print("Nessuna fonte disponibile: i dati pubblicati restano invariati.")
+        return 1
+    ris, fonte = acquisito
+
     try:
-        html = args.pagina.read_bytes() if args.pagina else scarica(URL_PAGINA)
-        ris = core.leggi_pagina_ufficiale(html, oggi)
-    except Exception as e:  # noqa: BLE001 — l'errore va riportato nel log, non propagato
-        motivo = f"saltata: {e}" if isinstance(e, Vietato) else f"errore: {type(e).__name__}: {e}"
-        print(f" • pagina MIMIT: {motivo}")
-        if isinstance(e, Vietato):
-            r = robots_di(URL_PAGINA)
-            print(f"   robots.txt: {r.stato}; agente: {AGENTE}")
-            if r.direttive:
-                print("   direttive di robots.txt (senza commenti):")
-                for riga in r.direttive[:80]:
-                    print(f"     {riga}")
-        print("Il file esistente resta invariato.")
+        tok = deposito.token() if args.github else None
+    except deposito.ErroreGitHub as e:
+        print(f" • GitHub: {e}")
         return 1
 
-    if not ris.voci:
-        print(" • pagina MIMIT: nessuna riga riconosciuta (TIPOLOGIA | EROGAZIONE | PREZZO MEDIO).")
-        print("   La struttura della pagina potrebbe essere cambiata: il file resta invariato.")
-        return 1
-
-    print(f" • pagina MIMIT letta: {ris.data:%d/%m/%Y}{' (data non indicata: si assume oggi)' if ris.data_dedotta else ''}")
-    for c in core.CARBURANTI:
-        v = ris.voci.get(c)
-        print(f"     {core.NOMI[c]:<8} {v['erogazione']:<8} {v['prezzo']:.3f} {core.UNITA[c]}" if v
-              else f"     {core.NOMI[c]:<8} assente nella pagina")
-
-    invariata = core.pagina_invariata(storico, ris)
-    if invariata:
-        print(f" • valori identici a quelli del {invariata}: pagina probabilmente non ancora aggiornata,"
-              " nessun nuovo giorno registrato.")
-        fonte.update(esito=f"pagina invariata rispetto al {invariata}")
-    else:
-        core.integra(storico, ris.data, ris.voci)
-        fonte.update(esito="ok", data=ris.data.isoformat(), data_dedotta=ris.data_dedotta)
-
-    storico = core.pota(storico, oggi)
-    dati = core.componi(storico, fonte, adesso, __version__)
-    try:
-        core.controlla_invarianti(dati)
-    except AssertionError as e:
-        print(f"Invariante violato, file NON scritto: {e}")
-        return 2
-
-    if core.contenuto_equivalente(precedente, dati):
-        print("Nessun dato nuovo: file invariato.")
-    else:
-        scrivi_atomico(args.json, dati)
-        print(f"Scritto {args.json}")
+    for tentativo in (1, 2):
+        try:
+            if args.github:
+                testo, sha = deposito.leggi(args.github, PERCORSO_DATI, tok)
+                precedente = da_testo(testo)
+            else:
+                precedente, sha = carica_json(args.json), None
+            dati = nuovi_dati(precedente, ris, fonte, adesso)
+            try:
+                core.controlla_invarianti(dati)
+            except AssertionError as e:
+                print(f"Invariante violato, dati NON scritti: {e}")
+                return 2
+            if core.contenuto_equivalente(precedente, dati):
+                print("Nessun dato nuovo: file invariato.")
+            elif args.github:
+                messaggio = f"Prezzi del {date.fromisoformat(dati['rilevazione']):%d/%m/%Y}"
+                commit = deposito.scrivi(args.github, PERCORSO_DATI, tok, in_testo(dati), sha, messaggio)
+                print(f"Pubblicato su GitHub ({args.github}): «{messaggio}», commit {commit[:7]}")
+            else:
+                scrivi_atomico(args.json, dati)
+                print(f"Scritto {args.json}")
+            break
+        except deposito.Conflitto as e:
+            if tentativo == 2:
+                print(f" • GitHub: {e}; riprova alla prossima esecuzione.")
+                return 1
+            print(f" • GitHub: {e}; rileggo e riprovo.")
+        except (deposito.ErroreGitHub, urllib.error.URLError, OSError) as e:
+            print(f" • GitHub: {e}")
+            return 1
 
     for r in dati["tabellone"]:
         prezzo = "  —  " if r["prezzo"] is None else f"{r['prezzo']:.3f}"

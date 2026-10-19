@@ -1,6 +1,13 @@
-Campione SINTETICO per le prove automatiche (test_core.py).
-La struttura della tabella ricalca la pagina MIMIT "Prezzi medi dei
-carburanti - Autostrade" del 19/10/2026 (TIPOLOGIA | EROGAZIONE |
-PREZZO MEDIO, nell'ordine Gasolio, Benzina, GPL, Metano), con i valori
-pubblicati quel giorno. Contiene di proposito un'esca in uno script e
-una data vecchia nel testo, che il parser deve ignorare.
+Campioni per le prove automatiche (test_core.py).
+
+MediaNazionaleAutostradale.csv
+    File REALE scaricato dal sito MIMIT il 19/10/2026
+    (https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv):
+    è la fonte principale del tabellone.
+
+pagina_autostrade.html
+    Pagina SINTETICA che ricalca la tabella "Prezzi medi dei carburanti -
+    Autostrade" del 19/10/2026 (TIPOLOGIA | EROGAZIONE | PREZZO MEDIO,
+    nell'ordine Gasolio, Benzina, GPL, Metano): è la fonte di riserva.
+    Contiene di proposito un'esca in uno script e date vecchie nel testo,
+    che il parser deve ignorare.

@@ -9,8 +9,10 @@ profilo di riferimento con cui si collauda un solutore.
 
 from __future__ import annotations
 
+import base64
 import io
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -20,11 +22,12 @@ from datetime import date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import __version__, aggiorna, core
+from . import __version__, aggiorna, core, deposito
 
 CAMPIONI = Path(__file__).parent / "campioni"
 RADICE = Path(__file__).parent.parent
 PAGINA = CAMPIONI / "pagina_autostrade.html"
+CSV = CAMPIONI / "MediaNazionaleAutostradale.csv"
 OGGI = date(2026, 10, 19)
 ROMA = ZoneInfo("Europe/Rome")
 
@@ -103,6 +106,37 @@ class PaginaUfficiale(unittest.TestCase):
                          {"gasolio": {"erogazione": "SELF", "prezzo": 2.297}})
 
 
+class CsvUfficiale(unittest.TestCase):
+    """Il campione è il file reale scaricato dal sito MIMIT il 19/10/2026."""
+
+    def test_file_reale(self):
+        r = core.leggi_csv_ufficiale(CSV.read_bytes(), OGGI)
+        self.assertEqual(r.voci, ATTESE)
+        self.assertEqual((r.data, r.data_dedotta), (OGGI, False))     # «Aggiornamento 19-10-2026»
+
+    def test_altre_reti_escluse_e_colonne_per_nome(self):
+        testo = ("Aggiornamento 18-10-2026\n"
+                 "PREZZO MEDIO;EROGAZIONE;TIPOLOGIA;TIPO\n"
+                 "2.111;SELF;Gasolio;STRADALE\n"
+                 "2.298;SELF;Gasolio;AUTOSTRADALE\n")
+        r = core.leggi_csv_ufficiale(testo, OGGI)
+        self.assertEqual(r.voci, {"gasolio": {"erogazione": "SELF", "prezzo": 2.298}})
+        self.assertEqual(r.data, date(2026, 10, 18))
+
+    def test_data_assente_o_futura(self):
+        corpo = "TIPO;TIPOLOGIA;EROGAZIONE;PREZZO MEDIO\nAUTOSTRADALE;GPL;SERVITO;0.901\n"
+        for testa in ("", "Aggiornamento 25-12-2026\n"):
+            r = core.leggi_csv_ufficiale(testa + corpo, OGGI)
+            self.assertEqual((r.data, r.data_dedotta), (OGGI, True))
+
+    def test_intestazione_inattesa(self):
+        with self.assertRaises(ValueError):
+            core.leggi_csv_ufficiale("TIPOLOGIA;COSTO\nGasolio;2.297\n", OGGI)
+
+    def test_date_con_trattini(self):
+        self.assertEqual(core.date_nel_testo("Aggiornamento 19-10-2026"), [OGGI])
+
+
 def _storico() -> dict:
     s: dict = {}
     core.integra(s, date(2026, 10, 18), {
@@ -156,6 +190,93 @@ class Storico(unittest.TestCase):
             core.controlla_invarianti(dati)
 
 
+class FintoGitHub:
+    """Simula l'API "contents" di GitHub: un solo file, con sha e commit."""
+
+    def __init__(self, testo: str | None = None, conflitti: int = 0):
+        self.testo, self.conflitti, self.scritture = testo, conflitti, []
+        self.sha = "sha0" if testo is not None else None
+
+    def __call__(self, metodo, url, tok, corpo=None):
+        assert tok == "tok-prova"
+        if metodo == "GET" and url.endswith("/repos/braucci/tabellone-carburanti"):
+            return {"full_name": "braucci/tabellone-carburanti"}
+        if metodo == "GET":
+            if self.testo is None:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return {"encoding": "base64", "sha": self.sha,
+                    "content": base64.encodebytes(self.testo.encode()).decode()}
+        if self.conflitti:
+            self.conflitti -= 1
+            self.sha = self.sha + "x" if self.sha else "sha-altro"
+            raise urllib.error.HTTPError(url, 409, "Conflict", {}, None)
+        assert corpo.get("sha") == self.sha, "scrittura con uno sha non aggiornato"
+        self.testo = base64.b64decode(corpo["content"]).decode()
+        self.sha = f"sha{len(self.scritture) + 1}"
+        self.scritture.append(corpo["message"])
+        return {"commit": {"sha": "abcdef1234"}}
+
+
+def _storico_ieri() -> dict:
+    return core.integra({}, date(2026, 10, 18), {"gasolio": {"erogazione": "SELF", "prezzo": 2.298}})
+
+
+class DepositoGitHub(unittest.TestCase):
+    def _con(self, finto):
+        originale = deposito._chiama
+        deposito._chiama = finto
+        self.addCleanup(setattr, deposito, "_chiama", originale)
+        os.environ["TABELLONE_TOKEN"] = "tok-prova"
+        self.addCleanup(os.environ.pop, "TABELLONE_TOKEN", None)
+        return finto
+
+    def _esegui(self, oggi=OGGI):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            codice = aggiorna.main(["--github", "braucci/tabellone-carburanti", "--csv", str(CSV),
+                                    "--oggi", oggi.isoformat()])
+        return codice, buf.getvalue()
+
+    def test_prima_scrittura_poi_nessun_commit(self):
+        g = self._con(FintoGitHub())
+        codice, testo = self._esegui()
+        self.assertEqual(codice, 0)
+        self.assertEqual(g.scritture, ["Prezzi del 19/10/2026"])
+        core.controlla_invarianti(json.loads(g.testo))
+        # Stessi dati il giorno dopo (CSV non ancora aggiornato): nessun nuovo commit.
+        codice, testo = self._esegui(date(2026, 10, 20))
+        self.assertEqual((codice, len(g.scritture)), (0, 1))
+        self.assertIn("file invariato", testo)
+
+    def test_conflitto_si_rilegge_e_si_riprova(self):
+        ieri = core.componi(_storico_ieri(), {}, datetime(2026, 10, 18, 11, 0, tzinfo=ROMA), __version__)
+        g = self._con(FintoGitHub(aggiorna.in_testo(ieri), conflitti=1))
+        codice, testo = self._esegui()
+        self.assertEqual((codice, len(g.scritture)), (0, 1))
+        self.assertIn("rileggo e riprovo", testo)
+
+    def test_token_rifiutato(self):
+        def rifiuta(metodo, url, tok, corpo=None):
+            raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
+        self._con(rifiuta)
+        codice, testo = self._esegui()
+        self.assertEqual(codice, 1)
+        self.assertIn("token non valido o scaduto", testo)
+
+    def test_verifica_senza_scrivere(self):
+        oggi = core.componi(_storico(), {}, datetime(2026, 10, 19, 11, 0, tzinfo=ROMA), __version__)
+        g = self._con(FintoGitHub(aggiorna.in_testo(oggi)))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            codice = aggiorna.main(["--github", "braucci/tabellone-carburanti", "--verifica-github"])
+        self.assertEqual((codice, g.scritture), (0, []))
+        self.assertIn("accesso a braucci/tabellone-carburanti riuscito", buf.getvalue())
+
+    def test_token_dalla_variabile(self):
+        self._con(FintoGitHub())
+        self.assertEqual(deposito.token(), "tok-prova")
+
+
 class Robots(unittest.TestCase):
     """Comportamento RFC 9309 simulato, senza rete."""
 
@@ -202,12 +323,22 @@ class Robots(unittest.TestCase):
 
 
 class EndToEnd(unittest.TestCase):
-    def _esegui(self, uscita: Path, oggi: date) -> tuple[int, str]:
+    def _esegui(self, uscita: Path, oggi: date, *fonti: str) -> tuple[int, str]:
         buf = io.StringIO()
         with redirect_stdout(buf):
-            codice = aggiorna.main(["--json", str(uscita), "--pagina", str(PAGINA),
+            codice = aggiorna.main(["--json", str(uscita), *(fonti or ("--pagina", str(PAGINA))),
                                     "--oggi", oggi.isoformat()])
         return codice, buf.getvalue()
+
+    def test_csv_rotto_si_usa_la_pagina(self):
+        with tempfile.TemporaryDirectory() as cartella:
+            rotto = Path(cartella) / "rotto.csv"
+            rotto.write_text("TIPOLOGIA;COSTO\nGasolio;2.297\n", encoding="utf-8")
+            codice, testo = self._esegui(Path(cartella) / "p.json", OGGI,
+                                         "--csv", str(rotto), "--pagina", str(PAGINA))
+            self.assertEqual(codice, 0)
+            self.assertIn("CSV MIMIT: errore", testo)
+            self.assertIn("pagina MIMIT letto", testo)
 
     def test_tre_esecuzioni(self):
         with tempfile.TemporaryDirectory() as cartella:

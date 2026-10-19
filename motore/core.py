@@ -5,18 +5,22 @@ Nessuna funzione di questo modulo accede alla rete o al disco: ricevono testo
 in isolamento, come un solutore che si collauda su casi noti prima di essere
 accoppiato al pre/post-processore.
 
-Fonte unica
------------
-La pagina "Prezzi medi dei carburanti - Autostrade" del MIMIT, tabella
-``TIPOLOGIA | EROGAZIONE | PREZZO MEDIO``. Il tabellone riporta i valori così
-come sono pubblicati: nessun calcolo, nessuna stima. L'erogazione (SELF o
-SERVITO) è letta dalla pagina, non presupposta.
+Fonti
+-----
+1. Il file ufficiale ``MediaNazionaleAutostradale.csv`` ("Media prezzi alle 8"),
+   con la data esplicita della rilevazione: è la fonte principale.
+2. La pagina "Prezzi medi dei carburanti - Autostrade", tabella
+   ``TIPOLOGIA | EROGAZIONE | PREZZO MEDIO``: fonte di riserva.
+
+Il tabellone riporta i valori così come sono pubblicati: nessun calcolo,
+nessuna stima. L'erogazione (SELF o SERVITO) è letta dalla fonte, non presupposta.
 
 Autore: Biagio Raucci — Licenza MIT.
 """
 
 from __future__ import annotations
 
+import csv
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -96,17 +100,20 @@ def erogazione(testo: str) -> str | None:
 
 _RE_ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
 _RE_IT = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
+_RE_TRATTINI = re.compile(r"\b(\d{1,2})-(\d{1,2})-(\d{4})\b")
 _RE_ESTESA = re.compile(
     r"\b(\d{1,2})\s+(" + "|".join(MESI) + r")\s+(\d{4})\b", re.IGNORECASE
 )
 
 
 def date_nel_testo(testo: str) -> list[date]:
-    """Tutte le date riconoscibili in un testo (gg/mm/aaaa, ISO, '19 ottobre 2026')."""
+    """Tutte le date riconoscibili in un testo (gg/mm/aaaa, gg-mm-aaaa, ISO, '19 ottobre 2026')."""
     trovate: list[date] = []
     for m in _RE_ISO.finditer(testo):
         _aggiungi(trovate, int(m[1]), int(m[2]), int(m[3]))
     for m in _RE_IT.finditer(testo):
+        _aggiungi(trovate, int(m[3]), int(m[2]), int(m[1]))
+    for m in _RE_TRATTINI.finditer(testo):
         _aggiungi(trovate, int(m[3]), int(m[2]), int(m[1]))
     for m in _RE_ESTESA.finditer(testo):
         _aggiungi(trovate, int(m[3]), MESI[m[2].lower()], int(m[1]))
@@ -185,6 +192,17 @@ class RisultatoUfficiale:
     data_dedotta: bool
 
 
+def _accetta(voci: dict, tipologia: str, testo_erogazione: str, testo_prezzo: str) -> None:
+    """Registra una riga se ha un carburante noto (tipologia esatta), un'erogazione
+    riconoscibile e un prezzo plausibile; a parità di carburante vale la prima."""
+    carburante = tipologia.strip().lower()
+    modo = erogazione(testo_erogazione)
+    p = leggi_prezzo(testo_prezzo)
+    if (carburante in CARBURANTI and carburante not in voci and modo
+            and p is not None and PREZZO_MIN <= p <= PREZZO_MAX):
+        voci[carburante] = {"erogazione": modo, "prezzo": al_millesimo(p)}
+
+
 _RE_RIGA_TESTUALE = re.compile(
     r"\b(gasolio|benzina|gpl|metano)\b[\s|]*"
     r"(self(?:[\s-]*service)?|servito)[\s|]*(\d[.,]\d{3})\b",
@@ -211,28 +229,65 @@ def leggi_pagina_ufficiale(html: bytes | str, oggi: date) -> RisultatoUfficiale:
     lettore.close()
 
     voci: dict[str, dict] = {}
-
-    def accetta(tipologia: str, testo_erogazione: str, testo_prezzo: str) -> None:
-        carburante = tipologia.strip().lower()
-        modo = erogazione(testo_erogazione)
-        p = leggi_prezzo(testo_prezzo)
-        if (carburante in CARBURANTI and carburante not in voci and modo
-                and p is not None and PREZZO_MIN <= p <= PREZZO_MAX):
-            voci[carburante] = {"erogazione": modo, "prezzo": al_millesimo(p)}
-
     for riga in lettore.righe:
         if len(riga) >= 3:
-            accetta(riga[0], riga[1], riga[2])
+            _accetta(voci, riga[0], riga[1], riga[2])
 
     testo = " ".join("".join(lettore.testo).split())
     if not voci:
         for m in _RE_RIGA_TESTUALE.finditer(testo):
-            accetta(m[1], m[2], m[3])
+            _accetta(voci, m[1], m[2], m[3])
 
     candidati = [d for d in date_nel_testo(testo)
                  if oggi - timedelta(days=FINESTRA_DATA) <= d <= oggi]
     if candidati:
         return RisultatoUfficiale(max(candidati), voci, False)
+    return RisultatoUfficiale(oggi, voci, True)
+
+
+# ---------------------------------------------------------------------------
+# CSV ufficiale ("Media prezzi alle 8")
+# ---------------------------------------------------------------------------
+
+def leggi_csv_ufficiale(dati: bytes | str, oggi: date) -> RisultatoUfficiale:
+    """Legge il file MIMIT MediaNazionaleAutostradale.csv:
+
+        Aggiornamento 19-10-2026
+        TIPO;TIPOLOGIA;EROGAZIONE;PREZZO MEDIO
+        AUTOSTRADALE;Gasolio;SELF;2.297
+        ...
+
+    Le colonne si individuano per nome, non per posizione; il separatore si
+    deduce dall'intestazione. Se c'è la colonna TIPO, si accettano solo le
+    righe AUTOSTRADALE. La data è quella della riga «Aggiornamento»; se manca,
+    o fosse nel futuro, si assume oggi e lo si segnala con ``data_dedotta``.
+    """
+    righe = [r for r in decodifica(dati).splitlines() if r.strip()]
+    data = None
+    for riga in righe:
+        if riga.strip().lower().startswith("aggiornamento"):
+            trovate = date_nel_testo(riga)
+            data = trovate[0] if trovate else None
+            break
+    i_testa = next((i for i, r in enumerate(righe) if "tipologia" in r.lower()), None)
+    voci: dict[str, dict] = {}
+    if i_testa is not None:
+        testa = righe[i_testa]
+        sep = max(";|,\t", key=testa.count)
+        colonne = [re.sub(r"\s+", "", c).lower() for c in next(csv.reader([testa], delimiter=sep))]
+        try:
+            i_tip, i_ero, i_prezzo = (colonne.index(n) for n in ("tipologia", "erogazione", "prezzomedio"))
+        except ValueError:
+            raise ValueError(f"intestazione del CSV inattesa: {testa!r}") from None
+        i_tipo = colonne.index("tipo") if "tipo" in colonne else None
+        for campi in csv.reader(righe[i_testa + 1:], delimiter=sep):
+            if len(campi) <= max(i_tip, i_ero, i_prezzo):
+                continue
+            if i_tipo is not None and campi[i_tipo].strip().lower() != "autostradale":
+                continue
+            _accetta(voci, campi[i_tip], campi[i_ero], campi[i_prezzo])
+    if data is not None and data <= oggi:
+        return RisultatoUfficiale(data, voci, False)
     return RisultatoUfficiale(oggi, voci, True)
 
 

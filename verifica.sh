@@ -9,11 +9,11 @@ cd "$(dirname "$0")"
 echo "== 1/3  Prove del motore"
 python3 -m unittest discover -s motore -t . -p 'test_*.py'
 
-echo "== 2/3  Esecuzione completa sul campione della pagina (senza rete)"
+echo "== 2/3  Esecuzione completa sul CSV ufficiale del 19/10/2026 (senza rete)"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 python3 -m motore.aggiorna --json "$tmp/prezzi.json" \
-  --pagina motore/campioni/pagina_autostrade.html --oggi 2026-10-19
+  --csv motore/campioni/MediaNazionaleAutostradale.csv --oggi 2026-10-19
 
 echo "== 3/3  Validità di manifest e dati pubblicati"
 python3 -m json.tool manifest.webmanifest > /dev/null
