@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Sito assemblato da GitHub Actions
+_site/
+
+# File temporanei del motore e dei sistemi operativi
+data/.prezzi-*.json
+.DS_Store
+*~
