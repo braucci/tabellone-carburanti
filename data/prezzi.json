@@ -1,15 +1,15 @@
 {
  "schema": 2,
  "app": "tabellone-carburanti",
- "versione": "1.1.0",
- "generato_il": "2026-10-19T14:05:00+02:00",
+ "versione": "1.2.0",
+ "generato_il": "2026-10-19T19:04:59+02:00",
  "rete": "Autostradale",
  "fonte": {
-  "url": "https://www.mimit.gov.it/it/prezzo-medio-carburanti/autostrade",
+  "url": "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv",
+  "formato": "csv",
   "esito": "ok",
   "data": "2026-10-19",
-  "data_dedotta": false,
-  "nota": "Dati iniziali trascritti dalla pagina MIMIT del 19/10/2026; le variazioni compariranno dalla prossima rilevazione."
+  "data_dedotta": false
  },
  "rilevazione": "2026-10-19",
  "tabellone": [
