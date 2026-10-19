@@ -35,6 +35,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -71,36 +72,64 @@ def _richiesta(url: str, timeout: float = 60) -> bytes:
         return dati
 
 
-_robots: dict[str, RobotFileParser] = {}
+@dataclass
+class Robots:
+    """Regole di robots.txt per un sito, con lo stato della lettura (per il log)."""
+
+    regole: RobotFileParser
+    stato: str                       # es. "letto (HTTP 200)"
+    irraggiungibile: bool = False    # vero se il divieto nasce dall'assenza di risposta
+    direttive: list[str] = field(default_factory=list)
 
 
-def _regole_robots(base: str) -> RobotFileParser:
+_robots: dict[str, Robots] = {}
+
+
+def _direttive(testo: str) -> list[str]:
+    """Le sole righe User-agent / Allow / Disallow, senza commenti: bastano per capire la regola."""
+    righe = []
+    for riga in testo.splitlines():
+        riga = riga.split("#", 1)[0].strip()
+        if riga.lower().startswith(("user-agent", "allow", "disallow")):
+            righe.append(riga)
+    return righe
+
+
+def robots_di(url: str) -> Robots:
+    p = urlsplit(url)
+    base = f"{p.scheme}://{p.netloc}"
     if base in _robots:
         return _robots[base]
     rp = RobotFileParser(base + "/robots.txt")
     try:
         testo = _richiesta(base + "/robots.txt", timeout=30).decode("utf-8", "replace")
         rp.parse(testo.splitlines())
+        r = Robots(rp, "letto (HTTP 200)", direttive=_direttive(testo))
     except urllib.error.HTTPError as e:
         rp.parse([])
         if 400 <= e.code < 500:
-            rp.allow_all = True       # RFC 9309 §2.3.1.3: "unavailable"
+            rp.allow_all = True       # RFC 9309 §2.3.1.3: "unavailable" → accesso consentito
+            r = Robots(rp, f"assente (HTTP {e.code}): accesso consentito")
         else:
-            rp.disallow_all = True    # RFC 9309 §2.3.1.4: "unreachable"
-    except (urllib.error.URLError, TimeoutError, OSError):
+            rp.disallow_all = True    # RFC 9309 §2.3.1.4: "unreachable" → accesso vietato
+            r = Robots(rp, f"irraggiungibile (HTTP {e.code})", irraggiungibile=True)
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
         rp.parse([])
         rp.disallow_all = True
-    _robots[base] = rp
-    return rp
+        r = Robots(rp, f"irraggiungibile ({type(e).__name__}: {e})", irraggiungibile=True)
+    _robots[base] = r
+    return r
 
 
 def consentito(url: str) -> bool:
-    p = urlsplit(url)
-    return _regole_robots(f"{p.scheme}://{p.netloc}").can_fetch(AGENTE, url)
+    return robots_di(url).regole.can_fetch(AGENTE, url)
 
 
 def scarica(url: str, tentativi: int = 3) -> bytes:
-    if not consentito(url):
+    r = robots_di(url)
+    if not r.regole.can_fetch(AGENTE, url):
+        if r.irraggiungibile:
+            raise Vietato(f"robots.txt {r.stato}: secondo la RFC 9309 l'accesso va considerato vietato")
         raise Vietato(f"robots.txt non consente l'accesso a {url}")
     attesa = 10
     for n in range(1, tentativi + 1):
@@ -173,6 +202,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001 — l'errore va riportato nel log, non propagato
         motivo = f"saltata: {e}" if isinstance(e, Vietato) else f"errore: {type(e).__name__}: {e}"
         print(f" • pagina MIMIT: {motivo}")
+        if isinstance(e, Vietato):
+            r = robots_di(URL_PAGINA)
+            print(f"   robots.txt: {r.stato}; agente: {AGENTE}")
+            if r.direttive:
+                print("   direttive di robots.txt (senza commenti):")
+                for riga in r.direttive[:80]:
+                    print(f"     {riga}")
         print("Il file esistente resta invariato.")
         return 1
 

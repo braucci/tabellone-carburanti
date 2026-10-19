@@ -10,4 +10,4 @@ Il pacchetto è diviso secondo lo schema solutore / pre-post-processore:
 Autore: Biagio Raucci — Licenza MIT.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"

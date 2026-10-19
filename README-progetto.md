@@ -1,6 +1,6 @@
 # Tabellone Carburanti — documentazione tecnica
 
-Versione 1.1.0 · Biagio Raucci · licenza MIT
+Versione 1.1.1 · Biagio Raucci · licenza MIT
 
 Questo documento descrive l'architettura, la lettura dei dati ministeriali
 (con le ragioni di ogni scelta), il funzionamento del tabellone a palette, la
@@ -232,7 +232,7 @@ tabellone-carburanti/
 │   ├── __init__.py            numero di versione
 │   ├── core.py                lettura della pagina, storico, invarianti
 │   ├── aggiorna.py            I/O: rete, robots.txt, scrittura atomica
-│   ├── test_core.py           20 prove automatiche
+│   ├── test_core.py           21 prove automatiche
 │   └── campioni/              pagina di prova modellata su quella reale
 ├── strumenti/genera_icone.py  rigenera le icone (serve Pillow)
 ├── .github/workflows/aggiorna.yml
@@ -356,7 +356,7 @@ del progetto:
 ./verifica.sh
 ```
 
-esegue le 20 prove, una lettura completa della pagina di prova e il controllo
+esegue le 21 prove, una lettura completa della pagina di prova e il controllo
 di manifest e dati. Per vedere il tabellone sul telefono senza pubblicarlo:
 
 ```bash
@@ -388,7 +388,7 @@ python3 -m motore.aggiorna --json data/prezzi.json
 
 - La struttura della tabella e i valori del 19/10/2026, dallo screenshot della
   pagina ministeriale: la pagina di prova in `motore/campioni` la riproduce.
-- 20 prove automatiche: lettura dei quattro carburanti con l'erogazione
+- 21 prove automatiche: lettura dei quattro carburanti con l'erogazione
   pubblicata, ordine della pagina, data assente o presente, esclusione di
   script, carburanti speciali e prezzi implausibili, ripiego testuale,
   idempotenza dello storico, variazioni solo a parità di erogazione,

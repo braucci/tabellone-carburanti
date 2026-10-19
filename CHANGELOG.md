@@ -3,6 +3,13 @@
 Formato ispirato a [Keep a Changelog](https://keepachangelog.com/it/1.1.0/);
 numerazione [semantica](https://semver.org/lang/it/).
 
+## [1.1.1] — 2026-10-19
+
+### Modificato
+- Diagnostica di `robots.txt` nel log: distingue un divieto esplicito da un
+  `robots.txt` irraggiungibile e, nel primo caso, stampa lo stato della
+  lettura e le direttive User-agent / Allow / Disallow del sito.
+
 ## [1.1.0] — 2026-10-19
 
 ### Modificato

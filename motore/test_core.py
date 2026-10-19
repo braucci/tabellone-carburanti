@@ -184,6 +184,21 @@ class Robots(unittest.TestCase):
     def test_robots_irraggiungibile_vieta(self):
         self._con(urllib.error.HTTPError("u", 503, "Unavailable", {}, None))
         self.assertFalse(aggiorna.consentito(aggiorna.URL_PAGINA))
+        with self.assertRaisesRegex(aggiorna.Vietato, r"irraggiungibile \(HTTP 503\).*RFC 9309"):
+            aggiorna.scarica(aggiorna.URL_PAGINA)
+
+    def test_log_mostra_la_regola(self):
+        """Con un divieto esplicito il log riporta lo stato e le direttive, non i commenti."""
+        self._con("# commento da non mostrare\nUser-agent: *\nDisallow: /it/  # area riservata\n")
+        buf = io.StringIO()
+        with redirect_stdout(buf), tempfile.TemporaryDirectory() as cartella:
+            codice = aggiorna.main(["--json", str(Path(cartella) / "p.json"), "--oggi", OGGI.isoformat()])
+        testo = buf.getvalue()
+        self.assertEqual(codice, 1)
+        self.assertIn("robots.txt non consente", testo)
+        self.assertIn("robots.txt: letto (HTTP 200)", testo)
+        self.assertIn("     User-agent: *\n     Disallow: /it/\n", testo)
+        self.assertNotIn("commento", testo)
 
 
 class EndToEnd(unittest.TestCase):
