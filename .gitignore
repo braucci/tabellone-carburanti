@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+_site/
+data/.prezzi-*.json
+.DS_Store
+*~
