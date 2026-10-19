@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tabellone-carburanti"
+version = "1.1.0"
+description = "Prezzi medi ufficiali MIMIT di gasolio, benzina, GPL e metano sulla rete autostradale, in stile tabellone ferroviario a palette"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Biagio Raucci" }]
+keywords = ["carburanti", "mimit", "autostrade", "pwa", "split-flap", "solari"]
+dependencies = []
+
+[project.optional-dependencies]
+icone = ["pillow"]
+
+[project.urls]
+Repository = "https://github.com/braucci/tabellone-carburanti"
+Homepage = "https://braucci.github.io/tabellone-carburanti/"
+
+[project.scripts]
+tabellone-aggiorna = "motore.aggiorna:main"
+
+[tool.setuptools]
+packages = ["motore"]

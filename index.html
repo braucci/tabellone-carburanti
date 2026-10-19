@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tabellone Carburanti</title>
+<meta name="description" content="Prezzi medi ufficiali MIMIT di gasolio, benzina, GPL e metano sulla rete autostradale italiana, in stile tabellone ferroviario a palette.">
+<meta name="theme-color" content="#0b0c0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Carburanti">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icone/icona-192.png">
+<link rel="apple-touch-icon" href="icone/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;1,500&family=DotGothic16&display=swap">
+<style>
+/* Disposizione: un tabellone Solari tascabile — cassa grafite, testata gialla,
+   quattro "corse" a palette (carburante, prezzo, variazione), riga LED in coda. */
+:root {
+  --notte: #0b0c0d;          /* fondo della pagina */
+  --cassa: #141517;          /* cassa del tabellone */
+  --telaio: #27292d;         /* binari e cornici */
+  --paletta-a1: #26272a;     /* paletta, metà alta */
+  --paletta-a2: #1f2022;
+  --paletta-b1: #1b1c1e;     /* paletta, metà bassa */
+  --paletta-b2: #161719;
+  --fessura: #050506;        /* luce fra le due metà */
+  --perno: #303236;
+  --gesso: #f1eee4;          /* caratteri delle palette */
+  --gesso-spento: #928e84;
+  --segnale: #f7c873;        /* giallo delle intestazioni */
+  --rialzo: #ff8a8a;
+  --ribasso: #6df0d2;
+  --led-fondo: #080807;
+  --bagliore: rgba(247, 200, 115, .45);
+  --luce: rgba(255, 255, 255, .045);
+  --ombra: rgba(0, 0, 0, .75);
+  --metallo-1: #cfcbc1;      /* targa in alluminio spazzolato */
+  --metallo-2: #a8a49b;
+  --metallo-3: #bdb9af;
+  --spazzolatura: rgba(255, 255, 255, .07);
+  --riflesso: rgba(255, 255, 255, .5);
+  --incisione: #2a2926;
+  --vite-luce: #e6e2d8;
+  --vite-ombra: #6d6a63;
+
+  --f-palette: "Barlow Condensed", "Roboto Condensed", "Arial Narrow", "Liberation Sans Narrow", sans-serif;
+  --f-testo: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --f-led: "DotGothic16", "JetBrains Mono", ui-monospace, monospace;
+
+  /* Modulo s: larghezza di una paletta piccola. Tutto il tabellone è
+     espresso in s, così si adatta alla larghezza del telefono. */
+  --s: clamp(10px, calc((100vw - 64px) / 23.4), 19px);
+  --c1: calc(var(--s) * 7.72);     /* 7 palette piccole */
+  --c2: calc(var(--s) * 9.33);     /* 4 grandi + virgola */
+  --c3: calc(var(--s) * 4.36);     /* 4 palette piccole */
+  --spazio: calc(var(--s) * .9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--notte); }
+body {
+  margin: 0;
+  background: var(--notte);
+  color: var(--gesso);
+  font-family: var(--f-testo);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 32px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stazione {
+  width: calc(var(--c1) + var(--c2) + var(--c3) + 2 * var(--spazio) + 30px);
+  max-width: 100%;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);   /* la riga LED non deve allargare la cassa */
+  gap: 16px;
+}
+
+/* ---- Cassa ------------------------------------------------------------ */
+.cassa {
+  background: var(--cassa);
+  border: 1px solid var(--telaio);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: inset 0 1px 0 var(--luce), 0 22px 44px -22px var(--ombra);
+}
+
+.testata {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+}
+.testata h1 {
+  margin: 0;
+  font: 700 calc(var(--s) * 2.05)/1 var(--f-palette);
+  letter-spacing: .045em;
+  text-transform: uppercase;
+  color: var(--segnale);
+  text-wrap: balance;
+}
+.testata .bilingue {
+  margin: .3em 0 0;
+  font: italic 500 calc(var(--s) * 1.02)/1.15 var(--f-palette);
+  letter-spacing: .02em;
+  color: var(--gesso);
+}
+.orologio { display: flex; gap: calc(var(--s) * .12); }
+
+.rete {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding-block: 7px;
+  border-block: 1px solid var(--telaio);
+  font: 600 calc(var(--s) * .82)/1.2 var(--f-palette);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--segnale);
+}
+
+.colonne, .corsa {
+  display: grid;
+  grid-template-columns: var(--c1) var(--c2) var(--c3);
+  justify-content: space-between;
+  align-items: center;
+}
+.colonne {
+  padding-block: 10px 6px;
+  font: 600 calc(var(--s) * .78)/1 var(--f-palette);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--segnale);
+}
+.colonne span:nth-child(2) { text-align: center; }
+.colonne span:nth-child(3) { text-align: right; }
+
+.corse { list-style: none; margin: 0; padding: 0; }
+.corsa {
+  padding-block: calc(var(--s) * .55);
+  border-top: 1px solid var(--telaio);
+}
+.corsa:nth-child(3) { border-top-color: var(--gesso-spento); }   /* cambio di carburante */
+.etichetta, .variazione { display: grid; gap: calc(var(--s) * .3); }
+.variazione { justify-items: end; }
+.fila { display: flex; gap: calc(var(--s) * .12); }
+.fila.grande { justify-content: center; }
+
+.unita {
+  margin: 0;
+  height: calc(var(--s) * 1.5);
+  font: 600 calc(var(--s) * .86)/calc(var(--s) * 1.5) var(--f-palette);
+  letter-spacing: .06em;
+  color: var(--gesso-spento);
+  white-space: nowrap;
+}
+
+/* ---- Paletta (split-flap) -------------------------------------------- */
+.paletta {
+  --w: var(--s);
+  --h: calc(var(--s) * 1.5);
+  position: relative;
+  flex: none;
+  width: var(--w);
+  height: var(--h);
+  border-radius: calc(var(--s) * .12);
+  background: var(--fessura);
+  perspective: calc(var(--h) * 3.2);
+  font: 600 calc(var(--h) * .8)/var(--h) var(--f-palette);
+  color: var(--gesso);
+  box-shadow: 0 1px 0 var(--luce);
+}
+.grande .paletta { --w: calc(var(--s) * 2); --h: calc(var(--s) * 3.3); }
+.grande .paletta.stretta { --w: calc(var(--s) * .85); }
+.orologio .paletta.stretta { --w: calc(var(--s) * .55); }
+.paletta::before, .paletta::after {            /* perni della cerniera */
+  content: "";
+  position: absolute;
+  top: calc(50% - var(--s) * .14);
+  width: max(1px, calc(var(--s) * .1));
+  height: calc(var(--s) * .28);
+  background: var(--perno);
+  z-index: 3;
+}
+.paletta::before { left: 0; }
+.paletta::after { right: 0; }
+.meta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(50% - .5px);
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.meta.alta {
+  top: 0;
+  border-radius: calc(var(--s) * .12) calc(var(--s) * .12) 0 0;
+  background: linear-gradient(var(--paletta-a1), var(--paletta-a2));
+  transform-origin: 50% 100%;
+}
+.meta.bassa {
+  bottom: 0;
+  border-radius: 0 0 calc(var(--s) * .12) calc(var(--s) * .12);
+  background: linear-gradient(var(--paletta-b1), var(--paletta-b2));
+  transform-origin: 50% 0;
+}
+.meta b { display: block; height: var(--h); text-align: center; font-weight: inherit; }
+.meta.bassa b { margin-top: calc(var(--h) / -2 - .5px); }
+.anta { z-index: 2; }
+.anta.alta { transform: rotateX(0deg); }
+.anta.bassa { transform: rotateX(90deg); }
+
+.su .meta b { color: var(--rialzo); }
+.giu .meta b { color: var(--ribasso); }
+.pari .meta b { color: var(--gesso-spento); }
+
+/* ---- Riga LED --------------------------------------------------------- */
+.led {
+  margin-top: 12px;
+  overflow: hidden;
+  background: var(--led-fondo);
+  border: 1px solid var(--telaio);
+  border-radius: 4px;
+  padding-block: 7px;
+}
+.led p {
+  display: inline-block;
+  margin: 0;
+  padding-left: 100%;
+  white-space: nowrap;
+  font: 400 max(12px, calc(var(--s) * .95))/1.35 var(--f-led);
+  letter-spacing: .06em;
+  color: var(--segnale);
+  text-shadow: 0 0 6px var(--bagliore);
+  animation: scorri var(--durata, 40s) linear infinite;
+}
+@keyframes scorri { to { transform: translateX(-100%); } }
+
+/* ---- Targa del costruttore (come la "SOLARI UDINE" dei tabelloni veri) -- */
+.targa { display: flex; justify-content: center; margin: 12px 0 0; }
+.targa span {
+  position: relative;
+  padding: 4px 24px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 2px, var(--spazzolatura) 2px 3px),
+    linear-gradient(180deg, var(--metallo-1), var(--metallo-2) 55%, var(--metallo-3));
+  box-shadow: inset 0 1px 0 var(--riflesso), 0 1px 2px var(--ombra);
+  font: 700 max(11px, calc(var(--s) * .8))/1.3 var(--f-palette);
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--incisione);
+  text-shadow: 0 1px 0 var(--riflesso);
+}
+.targa span::before, .targa span::after {          /* viti */
+  content: "";
+  position: absolute;
+  top: calc(50% - 3px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--vite-luce), var(--vite-ombra));
+}
+.targa span::before { left: 8px; }
+.targa span::after { right: 8px; }
+
+/* ---- Comandi e note --------------------------------------------------- */
+.comandi { display: flex; flex-wrap: wrap; gap: 10px; }
+button {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--telaio);
+  border-radius: 6px;
+  background: var(--cassa);
+  color: var(--gesso);
+  font: 600 15px/1 var(--f-palette);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+button:hover { border-color: var(--gesso-spento); }
+button[aria-pressed="true"] { color: var(--segnale); border-color: var(--segnale); }
+:focus-visible { outline: 2px solid var(--segnale); outline-offset: 2px; }
+
+.note {
+  display: grid;
+  gap: 8px;
+  font: 400 14px/1.5 var(--f-testo);
+  color: var(--gesso-spento);
+}
+.note p { margin: 0; }
+.note a { color: var(--gesso); text-underline-offset: 3px; }
+.note .su { color: var(--rialzo); font-weight: 500; }
+.note .giu { color: var(--ribasso); font-weight: 500; }
+.note .firma { font-size: 12px; letter-spacing: .03em; }
+
+.solo-lettore {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .led p { animation: none; padding-left: 0; white-space: normal; }
+}
+</style>
+</head>
+<body>
+<main class="stazione">
+  <section class="cassa" aria-labelledby="titolo">
+    <header class="testata">
+      <div>
+        <h1 id="titolo">Prezzi medi</h1>
+        <p class="bilingue">Carburanti · <span lang="en">Average fuel prices</span></p>
+      </div>
+      <div class="orologio fila" id="orologio" data-celle="5" data-stretta="2" aria-hidden="true"></div>
+    </header>
+
+    <p class="rete"><span>Rete autostradale</span><span id="quando">Rilevazione delle 8:00</span></p>
+
+    <div class="colonne" aria-hidden="true">
+      <span>Carburante</span><span>Prezzo medio</span><span>Var.</span>
+    </div>
+
+    <ol class="corse" id="corse">
+      <li class="corsa" data-chiave="gasolio">
+        <div class="etichetta" aria-hidden="true">
+          <div class="fila" data-celle="7" data-testo="GASOLIO"></div>
+          <div class="fila" data-celle="7"></div>
+        </div>
+        <div class="fila grande" data-celle="5" data-stretta="1" aria-hidden="true"></div>
+        <div class="variazione" aria-hidden="true">
+          <div class="fila" data-celle="4"></div>
+          <p class="unita">€/L</p>
+        </div>
+      </li>
+      <li class="corsa" data-chiave="benzina">
+        <div class="etichetta" aria-hidden="true">
+          <div class="fila" data-celle="7" data-testo="BENZINA"></div>
+          <div class="fila" data-celle="7"></div>
+        </div>
+        <div class="fila grande" data-celle="5" data-stretta="1" aria-hidden="true"></div>
+        <div class="variazione" aria-hidden="true">
+          <div class="fila" data-celle="4"></div>
+          <p class="unita">€/L</p>
+        </div>
+      </li>
+      <li class="corsa" data-chiave="gpl">
+        <div class="etichetta" aria-hidden="true">
+          <div class="fila" data-celle="7" data-testo="GPL"></div>
+          <div class="fila" data-celle="7"></div>
+        </div>
+        <div class="fila grande" data-celle="5" data-stretta="1" aria-hidden="true"></div>
+        <div class="variazione" aria-hidden="true">
+          <div class="fila" data-celle="4"></div>
+          <p class="unita">€/L</p>
+        </div>
+      </li>
+      <li class="corsa" data-chiave="metano">
+        <div class="etichetta" aria-hidden="true">
+          <div class="fila" data-celle="7" data-testo="METANO"></div>
+          <div class="fila" data-celle="7"></div>
+        </div>
+        <div class="fila grande" data-celle="5" data-stretta="1" aria-hidden="true"></div>
+        <div class="variazione" aria-hidden="true">
+          <div class="fila" data-celle="4"></div>
+          <p class="unita">€/kg</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="led" aria-hidden="true"><p id="led">CARICAMENTO DEI PREZZI IN CORSO</p></div>
+    <p class="targa"><span>Biagio Raucci</span></p>
+    <p class="solo-lettore" id="annuncio" aria-live="polite"></p>
+  </section>
+
+  <nav class="comandi" aria-label="Comandi">
+    <button type="button" id="rigira">Rigira le palette</button>
+    <button type="button" id="suono" aria-pressed="false">Suono spento</button>
+  </nav>
+
+  <footer class="note">
+    <p id="aggiornato">In attesa dei dati.</p>
+    <p>Valori come pubblicati dal Ministero: media nazionale sulla rete autostradale dei prezzi in vigore alle 8:00, con l’erogazione indicata per ciascun carburante. Gasolio, benzina e GPL in euro al litro, metano in euro al chilogrammo. Variazione in millesimi di euro rispetto alla rilevazione precedente: <span class="su">+</span> rialzo, <span class="giu">−</span> ribasso.</p>
+    <p>Fonte: <a href="https://www.mimit.gov.it/it/prezzo-medio-carburanti/autostrade" target="_blank" rel="noopener">Prezzi medi dei carburanti – Autostrade, MIMIT</a></p>
+    <p class="firma">Tabellone Carburanti <span id="versione"></span> · Biagio Raucci · licenza MIT</p>
+  </footer>
+</main>
+
+<script>
+'use strict';
+const VERSIONE = '1.1.0';
+
+/* Il tamburo di una paletta Solari gira in un solo verso: per passare da un
+   carattere a un altro attraversa tutti quelli intermedi. Il tempo di
+   assestamento di una cella è quindi t = k·τ, con k = (i_meta − i_attuale)
+   mod N passi e τ il periodo di un passo. */
+const TAMBURO = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.:/+-=';
+const N = TAMBURO.length;
+const TAU = 62;                         // ms per passo (due semifasi)
+const URL_DATI = 'data/prezzi.json';
+const ZONA = 'Europe/Rome';
+const lento = matchMedia('(prefers-reduced-motion: reduce)');
+
+const indice = c => Math.max(0, TAMBURO.indexOf(c));
+
+/* ---------------------------------------------------------------------- */
+/* Suono: un breve "clac" di rumore filtrato, solo dopo un tocco.          */
+let audio = null, rumore = null, ultimoClac = 0;
+function preparaAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return false;
+  audio = audio || new Ctx();
+  const n = Math.floor(audio.sampleRate * 0.035);
+  rumore = audio.createBuffer(1, n, audio.sampleRate);
+  const d = rumore.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (n / 6));
+  return true;
+}
+function clac() {
+  if (!audio || audio.state !== 'running') return;
+  const t = audio.currentTime;
+  if (t - ultimoClac < 0.014) return;
+  ultimoClac = t;
+  const sorgente = audio.createBufferSource();
+  sorgente.buffer = rumore;
+  const filtro = audio.createBiquadFilter();
+  filtro.type = 'bandpass';
+  filtro.frequency.value = 1700 + Math.random() * 1500;
+  filtro.Q.value = 1.1;
+  const guadagno = audio.createGain();
+  guadagno.gain.value = 0.22;
+  sorgente.connect(filtro).connect(guadagno).connect(audio.destination);
+  sorgente.start(t);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Un solo ciclo requestAnimationFrame muove tutte le palette in funzione del
+   tempo trascorso: il passo k inizia a t0 + k·τ, qualunque sia la frequenza
+   dei fotogrammi del telefono (60 o 120 Hz). Nella prima metà del passo cade
+   l'anta alta (0° → −90°, moto accelerato come una lamina che cade); nella
+   seconda arriva l'anta bassa (90° → 0°, con un piccolo rimbalzo). */
+const attive = new Set();
+let ciclo = 0;
+function fotogramma(ora) {
+  for (const p of attive) p._fotogramma(ora);
+  ciclo = attive.size ? requestAnimationFrame(fotogramma) : 0;
+}
+const rimbalzo = u => { const c1 = 1.1, c3 = c1 + 1; return 1 + c3 * (u - 1) ** 3 + c1 * (u - 1) ** 2; };
+
+class Paletta {
+  constructor(contenitore, stretta) {
+    const el = document.createElement('span');
+    el.className = 'paletta' + (stretta ? ' stretta' : '');
+    el.innerHTML = '<span class="meta alta"><b> </b></span><span class="meta bassa"><b> </b></span>'
+                 + '<span class="meta alta anta"><b> </b></span><span class="meta bassa anta"><b> </b></span>';
+    contenitore.append(el);
+    const m = el.children;
+    this.fissaAlta = m[0].firstChild; this.fissaBassa = m[1].firstChild;
+    this.antaAlta = m[2]; this.antaBassa = m[3];
+    this.car = ' ';
+    this.corsa = null;      // { da, meta, passi, t0, ultimo }
+  }
+  _scrivi(c) {
+    this.fissaAlta.textContent = this.fissaBassa.textContent = c;
+    this.antaAlta.firstChild.textContent = this.antaBassa.firstChild.textContent = c;
+    this.car = c;
+  }
+  _angoli(alto, basso) {
+    this.antaAlta.style.transform = `rotateX(${alto}deg)`;
+    this.antaBassa.style.transform = `rotateX(${basso}deg)`;
+  }
+  _ferma() {
+    if (!this.corsa) return;
+    this.corsa = null;
+    attive.delete(this);
+    this._scrivi(this.car);
+    this._angoli(0, 90);
+  }
+  /* Porta la cella sul carattere c girando in avanti; giri = rivoluzioni extra. */
+  gira(c, giri = 0, ritardo = 0) {
+    c = (c || ' ').toUpperCase();
+    if (!TAMBURO.includes(c)) c = ' ';
+    if (!giri && this.corsa && this.corsa.meta === c) return;      // già in viaggio verso c
+    this._ferma();
+    if (lento.matches || document.hidden) { this._scrivi(c); return; }
+    const da = indice(this.car);
+    const passi = (indice(c) - da + N) % N + giri * N;
+    if (!passi) return;
+    this.corsa = { da, meta: c, passi, t0: performance.now() + ritardo, ultimo: -1 };
+    attive.add(this);
+    if (!ciclo) ciclo = requestAnimationFrame(fotogramma);
+  }
+  _fotogramma(ora) {
+    const k = this.corsa;
+    const e = ora - k.t0;
+    if (e < 0) return;
+    const passo = Math.floor(e / TAU);
+    if (passo >= k.passi) {                      // arrivato
+      this.corsa = null;
+      attive.delete(this);
+      this._scrivi(k.meta);
+      this._angoli(0, 90);
+      clac();
+      return;
+    }
+    if (passo !== k.ultimo) {                    // inizia un nuovo passo
+      if (k.ultimo >= 0) clac();
+      k.ultimo = passo;
+      const a = TAMBURO[(k.da + passo) % N];
+      const b = TAMBURO[(k.da + passo + 1) % N]; // all'ultimo passo b è la meta
+      this.car = a;
+      this.fissaAlta.textContent = b;            // si scopre dietro l'anta che cade
+      this.fissaBassa.textContent = a;
+      this.antaAlta.firstChild.textContent = a;
+      this.antaBassa.firstChild.textContent = b;
+    }
+    const f = (e - passo * TAU) / TAU;           // fase nel passo, 0…1
+    if (f < .5) {
+      const u = f / .5;
+      this._angoli(-90 * u * u, 90);
+    } else {
+      const u = (f - .5) / .5;
+      this._angoli(-90, 90 * (1 - rimbalzo(u)));
+    }
+  }
+}
+
+/* Una fila di palette con testo allineato a sinistra o a destra. */
+class Fila {
+  constructor(el) {
+    this.el = el;
+    const n = Number(el.dataset.celle);
+    const stretta = el.dataset.stretta === undefined ? -1 : Number(el.dataset.stretta);
+    this.celle = Array.from({ length: n }, (_, i) => new Paletta(el, i === stretta));
+  }
+  testo(t, { destra = false, giri = 0, ritardo = 0, passoRitardo = 38 } = {}) {
+    const n = this.celle.length;
+    t = String(t).slice(0, n);
+    t = destra ? t.padStart(n, ' ') : t.padEnd(n, ' ');
+    this.celle.forEach((cella, i) =>
+      cella.gira(t[i], giri, ritardo + i * passoRitardo + Math.random() * 70));
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+const corse = [...document.querySelectorAll('.corsa')].map(li => {
+  const file = li.querySelectorAll('.fila');
+  return {
+    li,
+    chiave: li.dataset.chiave,
+    carburante: new Fila(file[0]),
+    erogazione: new Fila(file[1]),
+    prezzo: new Fila(file[2]),
+    variazione: new Fila(file[3]),
+    unita: li.querySelector('.unita'),
+  };
+});
+const orologio = new Fila(document.getElementById('orologio'));
+const led = document.getElementById('led');
+let dati = null, daCache = false, ultimoCaricamento = 0;
+
+const fmtPrezzo = p => p == null ? '-,---' : p.toFixed(3).replace('.', ',');
+const lunga = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+const oggiIso = () => new Intl.DateTimeFormat('sv-SE', { timeZone: ZONA }).format(new Date());
+const millesimi = v => Math.round(v * 1000);
+const maiuscolo = s => s.toUpperCase()
+  .replace(/[ÀÁ]/g, "A'").replace(/[ÈÉ]/g, "E'").replace(/[ÌÍ]/g, "I'")
+  .replace(/[ÒÓ]/g, "O'").replace(/[ÙÚ]/g, "U'");
+
+function testoVariazione(v) {
+  if (v == null) return '';
+  const m = millesimi(v);
+  if (m === 0) return '=';
+  return (m > 0 ? '+' : '-') + Math.min(Math.abs(m), 999);
+}
+
+function etichette({ giri = 0 } = {}) {
+  corse.forEach((c, r) => c.carburante.testo(c.carburante.el.dataset.testo, { giri, ritardo: r * 130 }));
+}
+
+const elenco = nomi => nomi.length < 2 ? nomi.join('') : `${nomi.slice(0, -1).join(', ')} E ${nomi.at(-1)}`;
+
+function mostra({ giri = 0, base = 350 } = {}) {
+  const righe = Object.fromEntries((dati?.tabellone || []).map(r => [r.chiave, r]));
+  corse.forEach((c, r) => {
+    const riga = righe[c.chiave] || {};
+    const ritardo = base + r * 170;
+    c.erogazione.testo(riga.erogazione || '', { giri, ritardo: r * 130 + 90 });
+    c.prezzo.testo(fmtPrezzo(riga.prezzo), { giri, ritardo, passoRitardo: 60 });
+    c.variazione.el.classList.remove('su', 'giu', 'pari');
+    if (riga.variazione != null) {
+      const m = millesimi(riga.variazione);
+      c.variazione.el.classList.add(m > 0 ? 'su' : m < 0 ? 'giu' : 'pari');
+    }
+    const v = riga.prezzo == null ? (dati ? 'N.D.' : '') : testoVariazione(riga.variazione);
+    c.variazione.testo(v, { destra: true, giri, ritardo: ritardo + 200 });
+    // L maiuscola (simbolo SI ammesso per il litro): nel carattere condensato la l minuscola sembra una I
+    if (riga.unita) c.unita.textContent = riga.unita.replace('/l', '/L');
+
+    const nome = (riga.carburante || c.chiave).toLowerCase();
+    const misura = riga.unita === '€/kg' ? 'chilogrammo' : 'litro';
+    c.li.setAttribute('aria-label', riga.prezzo == null
+      ? `${nome}: dato non disponibile`
+      : `${nome}, ${riga.erogazione.toLowerCase()}: ${fmtPrezzo(riga.prezzo)} euro al ${misura}` +
+        (riga.variazione == null ? '' : `, variazione ${testoVariazione(riga.variazione)} millesimi`) +
+        `, rilevazione del ${lunga(riga.data)}`);
+  });
+  document.getElementById('quando').textContent =
+    dati?.rilevazione ? `Ore 8:00 del ${lunga(dati.rilevazione)}` : 'Rilevazione delle 8:00';
+}
+
+function messaggiLed() {
+  if (!dati) return ['DATI NON DISPONIBILI: CONTROLLARE LA CONNESSIONE E PREMERE "RIGIRA LE PALETTE"'];
+  const righe = (dati.tabellone || []).filter(r => r.prezzo != null);
+  const m = [];
+  if (daCache) m.push("MODALITA' OFFLINE: DATI CONSERVATI NEL TELEFONO");
+  if (dati.rilevazione) {
+    const giorni = (Date.parse(oggiIso()) - Date.parse(dati.rilevazione)) / 864e5;
+    if (giorni > 2) m.push(`ATTENZIONE: ULTIMA RILEVAZIONE DEL ${lunga(dati.rilevazione)}`);
+    m.push(`PREZZI MEDI UFFICIALI DEL ${lunga(dati.rilevazione)} SULLA RETE AUTOSTRADALE, PREZZI IN VIGORE ALLE ORE 8:00`);
+  }
+  const perErogazione = {};
+  righe.forEach(r => (perErogazione[r.erogazione] ||= []).push(r.carburante));
+  for (const [e, nomi] of Object.entries(perErogazione)) {
+    m.push(`${elenco(nomi)}: ${e === 'SELF' ? 'SELF SERVICE' : e}`);
+  }
+  const alKg = righe.filter(r => r.unita === '€/kg').map(r => r.carburante);
+  if (alKg.length) m.push(`${elenco(alKg)} IN EURO AL CHILOGRAMMO`);
+  if ((dati.tabellone || []).some(r => r.prezzo == null)) m.push('N.D. = DATO NON PUBBLICATO');
+  if (righe.length && righe.every(r => r.variazione == null)) m.push('VARIAZIONI DISPONIBILI DALLA PROSSIMA RILEVAZIONE');
+  m.push('FONTE: MINISTERO DELLE IMPRESE E DEL MADE IN ITALY - OSSERVATORIO PREZZI CARBURANTI');
+  m.push('TABELLONE CARBURANTI DI BIAGIO RAUCCI');
+  return m;
+}
+
+function aggiornaLed() {
+  led.textContent = messaggiLed().map(maiuscolo).join('   ·   ');
+  requestAnimationFrame(() => {
+    const percorso = led.scrollWidth;              // include il padding iniziale
+    led.style.setProperty('--durata', `${Math.max(12, percorso / 58)}s`);
+  });
+}
+
+function aggiornaNote() {
+  const el = document.getElementById('aggiornato');
+  if (!dati) { el.textContent = 'Dati non disponibili.'; return; }
+  const g = new Date(dati.generato_il);
+  const quando = new Intl.DateTimeFormat('it-IT', { timeZone: ZONA, dateStyle: 'long', timeStyle: 'short' }).format(g);
+  el.textContent = `Dati letti dalla pagina del Ministero il ${quando}${daCache ? ' (copia conservata offline)' : ''}.`;
+  document.getElementById('annuncio').textContent = corse.map(c => c.li.getAttribute('aria-label')).join('. ');
+}
+
+async function carica() {
+  try {
+    const r = await fetch(URL_DATI, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    if (j.schema !== 2 || !Array.isArray(j.tabellone)) throw new Error('formato dati inatteso');
+    daCache = r.headers.get('X-Tabellone-Cache') === '1';
+    const cambiato = !dati || JSON.stringify(dati.tabellone) !== JSON.stringify(j.tabellone);
+    dati = j;
+    ultimoCaricamento = Date.now();
+    return cambiato;
+  } catch (e) {
+    console.warn('Tabellone: dati non caricati —', e);
+    return !dati;
+  }
+}
+
+function aggiornaOrologio() {
+  const ora = new Intl.DateTimeFormat('it-IT', { timeZone: ZONA, hour: '2-digit', minute: '2-digit' }).format(new Date());
+  orologio.testo(ora, { passoRitardo: 25 });
+}
+
+async function avvio() {
+  document.getElementById('versione').textContent = VERSIONE;
+  etichette();
+  aggiornaOrologio();
+  setInterval(aggiornaOrologio, 10000);
+  await carica();
+  mostra();
+  aggiornaLed();
+  aggiornaNote();
+}
+
+document.getElementById('rigira').addEventListener('click', async () => {
+  if (!dati || Date.now() - ultimoCaricamento > 15 * 60e3) await carica();
+  etichette({ giri: 1 });
+  mostra({ giri: 1, base: 200 });
+  aggiornaLed();
+  aggiornaNote();
+});
+
+document.getElementById('suono').addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  const attivo = btn.getAttribute('aria-pressed') === 'true';
+  if (attivo) {
+    if (audio) await audio.suspend();
+  } else {
+    if (!audio && !preparaAudio()) return;
+    try { await audio.resume(); } catch (e) { return; }
+  }
+  btn.setAttribute('aria-pressed', String(!attivo));
+  btn.textContent = attivo ? 'Suono spento' : 'Suono acceso';
+});
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || Date.now() - ultimoCaricamento < 30 * 60e3) return;
+  if (await carica()) { mostra({ base: 100 }); aggiornaLed(); aggiornaNote(); }
+});
+
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+avvio();
+</script>
+</body>
+</html>

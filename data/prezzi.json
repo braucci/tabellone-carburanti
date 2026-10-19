@@ -1,0 +1,77 @@
+{
+ "schema": 2,
+ "app": "tabellone-carburanti",
+ "versione": "1.1.0",
+ "generato_il": "2026-10-19T14:05:00+02:00",
+ "rete": "Autostradale",
+ "fonte": {
+  "url": "https://www.mimit.gov.it/it/prezzo-medio-carburanti/autostrade",
+  "esito": "ok",
+  "data": "2026-10-19",
+  "data_dedotta": false,
+  "nota": "Dati iniziali trascritti dalla pagina MIMIT del 19/10/2026; le variazioni compariranno dalla prossima rilevazione."
+ },
+ "rilevazione": "2026-10-19",
+ "tabellone": [
+  {
+   "chiave": "gasolio",
+   "carburante": "GASOLIO",
+   "unita": "€/l",
+   "erogazione": "SELF",
+   "prezzo": 2.297,
+   "data": "2026-10-19",
+   "variazione": null,
+   "data_precedente": null
+  },
+  {
+   "chiave": "benzina",
+   "carburante": "BENZINA",
+   "unita": "€/l",
+   "erogazione": "SELF",
+   "prezzo": 2.048,
+   "data": "2026-10-19",
+   "variazione": null,
+   "data_precedente": null
+  },
+  {
+   "chiave": "gpl",
+   "carburante": "GPL",
+   "unita": "€/l",
+   "erogazione": "SERVITO",
+   "prezzo": 0.901,
+   "data": "2026-10-19",
+   "variazione": null,
+   "data_precedente": null
+  },
+  {
+   "chiave": "metano",
+   "carburante": "METANO",
+   "unita": "€/kg",
+   "erogazione": "SERVITO",
+   "prezzo": 1.9,
+   "data": "2026-10-19",
+   "variazione": null,
+   "data_precedente": null
+  }
+ ],
+ "storico": {
+  "2026-10-19": {
+   "gasolio": {
+    "erogazione": "SELF",
+    "prezzo": 2.297
+   },
+   "benzina": {
+    "erogazione": "SELF",
+    "prezzo": 2.048
+   },
+   "gpl": {
+    "erogazione": "SERVITO",
+    "prezzo": 0.901
+   },
+   "metano": {
+    "erogazione": "SERVITO",
+    "prezzo": 1.9
+   }
+  }
+ }
+}
