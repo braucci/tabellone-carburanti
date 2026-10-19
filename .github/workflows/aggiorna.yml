@@ -1,25 +1,23 @@
-# Tabellone Carburanti — aggiornamento quotidiano e pubblicazione su GitHub Pages.
+# Tabellone Carburanti — pubblicazione su GitHub Pages.
 #
-# Ogni mattina: prova del motore → acquisizione dati MIMIT → archiviazione di
-# data/prezzi.json nel repository → pubblicazione del sito.
-# Gli orari cron sono in UTC: 08:47 e 11:47 UTC corrispondono alle 10:47 e
-# 13:47 con l'ora legale, alle 9:47 e 12:47 con l'ora solare. La seconda
-# esecuzione recupera il caso in cui la pagina MIMIT sia aggiornata in ritardo.
+# I dati li scrive il Mac (strumenti/macos/installa.sh) con un commit su
+# data/prezzi.json: ogni commit sul ramo main fa ripartire questo workflow,
+# che prova il motore, controlla i dati e rimette online il sito.
+# La lettura dal MIMIT non avviene qui: il sito del Ministero non risponde
+# ai server di GitHub (verificato il 19/10/2026: robots.txt in timeout).
 #
 # Autore: Biagio Raucci — Licenza MIT.
 
-name: Aggiorna tabellone
+name: Pubblica tabellone
 
 on:
-  schedule:
-    - cron: "47 8,11 * * *"
-  workflow_dispatch:        # pulsante "Run workflow" nella scheda Actions
   push:
-    branches: [main]        # ogni modifica caricata ripubblica il sito
+    branches: [main]
+  workflow_dispatch:        # pulsante "Run workflow" nella scheda Actions
 
 permissions:
-  contents: write           # per archiviare data/prezzi.json
-  pages: write              # per pubblicare su GitHub Pages
+  contents: read
+  pages: write
   id-token: write
 
 concurrency:
@@ -27,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  aggiorna:
+  pubblica:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -36,28 +34,14 @@ jobs:
       - name: Scarica il repository
         uses: actions/checkout@v5
 
-      - name: Prova il motore (nessuna rete)
+      - name: Prova il motore
         run: |
           python3 --version
           python3 -m unittest discover -s motore -t . -p 'test_*.py' -v
 
-      - name: Acquisisci i prezzi dal MIMIT
-        id: dati
-        continue-on-error: true
-        run: python3 -m motore.aggiorna --json data/prezzi.json
-
-      - name: Archivia i dati nel repository
+      - name: Controlla i dati da pubblicare
         run: |
-          if git diff --quiet -- data/prezzi.json; then
-            echo "Nessun dato nuovo da archiviare."
-            exit 0
-          fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/prezzi.json
-          git commit -m "Prezzi del $(TZ=Europe/Rome date +%d/%m/%Y)"
-          git pull --rebase --autostash
-          git push
+          python3 -c "import json; from motore import core; d = json.load(open('data/prezzi.json', encoding='utf-8')); core.controlla_invarianti(d); print('Rilevazione pubblicata:', d['rilevazione'])"
 
       - name: Prepara la cartella del sito
         run: |
@@ -72,9 +56,3 @@ jobs:
       - name: Pubblica su GitHub Pages
         id: pubblica
         uses: actions/deploy-pages@v4
-
-      - name: Segnala un'acquisizione non riuscita
-        if: steps.dati.outcome == 'failure'
-        run: |
-          echo "::error::Nessuna fonte MIMIT disponibile: il sito mostra l'ultimo dato archiviato."
-          exit 1
