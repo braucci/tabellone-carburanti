@@ -2,26 +2,26 @@
  "schema": 2,
  "app": "tabellone-carburanti",
  "versione": "1.2.0",
- "generato_il": "2026-10-20T18:51:00+02:00",
+ "generato_il": "2026-10-21T09:40:05+02:00",
  "rete": "Autostradale",
  "fonte": {
   "url": "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv",
   "formato": "csv",
   "esito": "ok",
-  "data": "2026-10-20",
+  "data": "2026-10-21",
   "data_dedotta": false
  },
- "rilevazione": "2026-10-20",
+ "rilevazione": "2026-10-21",
  "tabellone": [
   {
    "chiave": "gasolio",
    "carburante": "GASOLIO",
    "unita": "€/l",
    "erogazione": "SELF",
-   "prezzo": 2.292,
-   "data": "2026-10-20",
-   "variazione": -0.005,
-   "data_precedente": "2026-10-19"
+   "prezzo": 2.294,
+   "data": "2026-10-21",
+   "variazione": 0.002,
+   "data_precedente": "2026-10-20"
   },
   {
    "chiave": "benzina",
@@ -29,9 +29,9 @@
    "unita": "€/l",
    "erogazione": "SELF",
    "prezzo": 2.045,
-   "data": "2026-10-20",
-   "variazione": -0.003,
-   "data_precedente": "2026-10-19"
+   "data": "2026-10-21",
+   "variazione": 0.0,
+   "data_precedente": "2026-10-20"
   },
   {
    "chiave": "gpl",
@@ -39,19 +39,19 @@
    "unita": "€/l",
    "erogazione": "SERVITO",
    "prezzo": 0.901,
-   "data": "2026-10-20",
+   "data": "2026-10-21",
    "variazione": 0.0,
-   "data_precedente": "2026-10-19"
+   "data_precedente": "2026-10-20"
   },
   {
    "chiave": "metano",
    "carburante": "METANO",
    "unita": "€/kg",
    "erogazione": "SERVITO",
-   "prezzo": 1.901,
-   "data": "2026-10-20",
+   "prezzo": 1.902,
+   "data": "2026-10-21",
    "variazione": 0.001,
-   "data_precedente": "2026-10-19"
+   "data_precedente": "2026-10-20"
   }
  ],
  "storico": {
@@ -89,6 +89,24 @@
    "metano": {
     "erogazione": "SERVITO",
     "prezzo": 1.901
+   }
+  },
+  "2026-10-21": {
+   "gasolio": {
+    "erogazione": "SELF",
+    "prezzo": 2.294
+   },
+   "benzina": {
+    "erogazione": "SELF",
+    "prezzo": 2.045
+   },
+   "gpl": {
+    "erogazione": "SERVITO",
+    "prezzo": 0.901
+   },
+   "metano": {
+    "erogazione": "SERVITO",
+    "prezzo": 1.902
    }
   }
  }
