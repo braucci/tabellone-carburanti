@@ -2,36 +2,36 @@
  "schema": 2,
  "app": "tabellone-carburanti",
  "versione": "1.2.0",
- "generato_il": "2026-10-21T09:40:05+02:00",
+ "generato_il": "2026-10-22T11:49:50+02:00",
  "rete": "Autostradale",
  "fonte": {
   "url": "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv",
   "formato": "csv",
   "esito": "ok",
-  "data": "2026-10-21",
+  "data": "2026-10-22",
   "data_dedotta": false
  },
- "rilevazione": "2026-10-21",
+ "rilevazione": "2026-10-22",
  "tabellone": [
   {
    "chiave": "gasolio",
    "carburante": "GASOLIO",
    "unita": "€/l",
    "erogazione": "SELF",
-   "prezzo": 2.294,
-   "data": "2026-10-21",
-   "variazione": 0.002,
-   "data_precedente": "2026-10-20"
+   "prezzo": 2.3,
+   "data": "2026-10-22",
+   "variazione": 0.006,
+   "data_precedente": "2026-10-21"
   },
   {
    "chiave": "benzina",
    "carburante": "BENZINA",
    "unita": "€/l",
    "erogazione": "SELF",
-   "prezzo": 2.045,
-   "data": "2026-10-21",
-   "variazione": 0.0,
-   "data_precedente": "2026-10-20"
+   "prezzo": 2.047,
+   "data": "2026-10-22",
+   "variazione": 0.002,
+   "data_precedente": "2026-10-21"
   },
   {
    "chiave": "gpl",
@@ -39,19 +39,19 @@
    "unita": "€/l",
    "erogazione": "SERVITO",
    "prezzo": 0.901,
-   "data": "2026-10-21",
+   "data": "2026-10-22",
    "variazione": 0.0,
-   "data_precedente": "2026-10-20"
+   "data_precedente": "2026-10-21"
   },
   {
    "chiave": "metano",
    "carburante": "METANO",
    "unita": "€/kg",
    "erogazione": "SERVITO",
-   "prezzo": 1.902,
-   "data": "2026-10-21",
-   "variazione": 0.001,
-   "data_precedente": "2026-10-20"
+   "prezzo": 1.905,
+   "data": "2026-10-22",
+   "variazione": 0.003,
+   "data_precedente": "2026-10-21"
   }
  ],
  "storico": {
@@ -107,6 +107,24 @@
    "metano": {
     "erogazione": "SERVITO",
     "prezzo": 1.902
+   }
+  },
+  "2026-10-22": {
+   "gasolio": {
+    "erogazione": "SELF",
+    "prezzo": 2.3
+   },
+   "benzina": {
+    "erogazione": "SELF",
+    "prezzo": 2.047
+   },
+   "gpl": {
+    "erogazione": "SERVITO",
+    "prezzo": 0.901
+   },
+   "metano": {
+    "erogazione": "SERVITO",
+    "prezzo": 1.905
    }
   }
  }
