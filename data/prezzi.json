@@ -2,16 +2,16 @@
  "schema": 2,
  "app": "tabellone-carburanti",
  "versione": "1.2.0",
- "generato_il": "2026-10-26T11:41:59+01:00",
+ "generato_il": "2026-10-27T09:40:05+01:00",
  "rete": "Autostradale",
  "fonte": {
   "url": "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv",
   "formato": "csv",
   "esito": "ok",
-  "data": "2026-10-26",
+  "data": "2026-10-27",
   "data_dedotta": false
  },
- "rilevazione": "2026-10-26",
+ "rilevazione": "2026-10-27",
  "tabellone": [
   {
    "chiave": "gasolio",
@@ -19,19 +19,19 @@
    "unita": "€/l",
    "erogazione": "SELF",
    "prezzo": 2.302,
-   "data": "2026-10-26",
+   "data": "2026-10-27",
    "variazione": 0.0,
-   "data_precedente": "2026-10-25"
+   "data_precedente": "2026-10-26"
   },
   {
    "chiave": "benzina",
    "carburante": "BENZINA",
    "unita": "€/l",
    "erogazione": "SELF",
-   "prezzo": 2.042,
-   "data": "2026-10-26",
-   "variazione": 0.0,
-   "data_precedente": "2026-10-25"
+   "prezzo": 2.041,
+   "data": "2026-10-27",
+   "variazione": -0.001,
+   "data_precedente": "2026-10-26"
   },
   {
    "chiave": "gpl",
@@ -39,19 +39,19 @@
    "unita": "€/l",
    "erogazione": "SERVITO",
    "prezzo": 0.902,
-   "data": "2026-10-26",
+   "data": "2026-10-27",
    "variazione": 0.0,
-   "data_precedente": "2026-10-25"
+   "data_precedente": "2026-10-26"
   },
   {
    "chiave": "metano",
    "carburante": "METANO",
    "unita": "€/kg",
    "erogazione": "SERVITO",
-   "prezzo": 1.936,
-   "data": "2026-10-26",
+   "prezzo": 1.935,
+   "data": "2026-10-27",
    "variazione": -0.001,
-   "data_precedente": "2026-10-25"
+   "data_precedente": "2026-10-26"
   }
  ],
  "storico": {
@@ -197,6 +197,24 @@
    "metano": {
     "erogazione": "SERVITO",
     "prezzo": 1.936
+   }
+  },
+  "2026-10-27": {
+   "gasolio": {
+    "erogazione": "SELF",
+    "prezzo": 2.302
+   },
+   "benzina": {
+    "erogazione": "SELF",
+    "prezzo": 2.041
+   },
+   "gpl": {
+    "erogazione": "SERVITO",
+    "prezzo": 0.902
+   },
+   "metano": {
+    "erogazione": "SERVITO",
+    "prezzo": 1.935
    }
   }
  }
