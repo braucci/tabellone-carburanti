@@ -2,26 +2,26 @@
  "schema": 2,
  "app": "tabellone-carburanti",
  "versione": "1.2.0",
- "generato_il": "2026-11-01T09:40:01+01:00",
+ "generato_il": "2026-11-02T09:40:05+01:00",
  "rete": "Autostradale",
  "fonte": {
   "url": "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv",
   "formato": "csv",
   "esito": "ok",
-  "data": "2026-11-01",
+  "data": "2026-11-02",
   "data_dedotta": false
  },
- "rilevazione": "2026-11-01",
+ "rilevazione": "2026-11-02",
  "tabellone": [
   {
    "chiave": "gasolio",
    "carburante": "GASOLIO",
    "unita": "€/l",
    "erogazione": "SELF",
-   "prezzo": 2.287,
-   "data": "2026-11-01",
+   "prezzo": 2.286,
+   "data": "2026-11-02",
    "variazione": -0.001,
-   "data_precedente": "2026-10-31"
+   "data_precedente": "2026-11-01"
   },
   {
    "chiave": "benzina",
@@ -29,9 +29,9 @@
    "unita": "€/l",
    "erogazione": "SELF",
    "prezzo": 2.036,
-   "data": "2026-11-01",
+   "data": "2026-11-02",
    "variazione": 0.0,
-   "data_precedente": "2026-10-31"
+   "data_precedente": "2026-11-01"
   },
   {
    "chiave": "gpl",
@@ -39,9 +39,9 @@
    "unita": "€/l",
    "erogazione": "SERVITO",
    "prezzo": 0.903,
-   "data": "2026-11-01",
+   "data": "2026-11-02",
    "variazione": 0.0,
-   "data_precedente": "2026-10-31"
+   "data_precedente": "2026-11-01"
   },
   {
    "chiave": "metano",
@@ -49,9 +49,9 @@
    "unita": "€/kg",
    "erogazione": "SERVITO",
    "prezzo": 1.962,
-   "data": "2026-11-01",
-   "variazione": 0.009,
-   "data_precedente": "2026-10-31"
+   "data": "2026-11-02",
+   "variazione": 0.0,
+   "data_precedente": "2026-11-01"
   }
  ],
  "storico": {
@@ -293,6 +293,24 @@
    "gasolio": {
     "erogazione": "SELF",
     "prezzo": 2.287
+   },
+   "benzina": {
+    "erogazione": "SELF",
+    "prezzo": 2.036
+   },
+   "gpl": {
+    "erogazione": "SERVITO",
+    "prezzo": 0.903
+   },
+   "metano": {
+    "erogazione": "SERVITO",
+    "prezzo": 1.962
+   }
+  },
+  "2026-11-02": {
+   "gasolio": {
+    "erogazione": "SELF",
+    "prezzo": 2.286
    },
    "benzina": {
     "erogazione": "SELF",
