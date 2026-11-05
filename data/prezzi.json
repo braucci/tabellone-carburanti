@@ -2,16 +2,16 @@
  "schema": 2,
  "app": "tabellone-carburanti",
  "versione": "1.2.0",
- "generato_il": "2026-11-04T09:40:36+01:00",
+ "generato_il": "2026-11-05T11:55:54+01:00",
  "rete": "Autostradale",
  "fonte": {
   "url": "https://www.mimit.gov.it/images/stories/carburanti/MediaNazionaleAutostradale.csv",
   "formato": "csv",
   "esito": "ok",
-  "data": "2026-11-04",
+  "data": "2026-11-05",
   "data_dedotta": false
  },
- "rilevazione": "2026-11-04",
+ "rilevazione": "2026-11-05",
  "tabellone": [
   {
    "chiave": "gasolio",
@@ -19,39 +19,39 @@
    "unita": "€/l",
    "erogazione": "SELF",
    "prezzo": 2.281,
-   "data": "2026-11-04",
-   "variazione": -0.002,
-   "data_precedente": "2026-11-03"
+   "data": "2026-11-05",
+   "variazione": 0.0,
+   "data_precedente": "2026-11-04"
   },
   {
    "chiave": "benzina",
    "carburante": "BENZINA",
    "unita": "€/l",
    "erogazione": "SELF",
-   "prezzo": 2.033,
-   "data": "2026-11-04",
+   "prezzo": 2.032,
+   "data": "2026-11-05",
    "variazione": -0.001,
-   "data_precedente": "2026-11-03"
+   "data_precedente": "2026-11-04"
   },
   {
    "chiave": "gpl",
    "carburante": "GPL",
    "unita": "€/l",
    "erogazione": "SERVITO",
-   "prezzo": 0.905,
-   "data": "2026-11-04",
-   "variazione": 0.001,
-   "data_precedente": "2026-11-03"
+   "prezzo": 0.908,
+   "data": "2026-11-05",
+   "variazione": 0.003,
+   "data_precedente": "2026-11-04"
   },
   {
    "chiave": "metano",
    "carburante": "METANO",
    "unita": "€/kg",
    "erogazione": "SERVITO",
-   "prezzo": 1.962,
-   "data": "2026-11-04",
-   "variazione": 0.0,
-   "data_precedente": "2026-11-03"
+   "prezzo": 1.966,
+   "data": "2026-11-05",
+   "variazione": 0.004,
+   "data_precedente": "2026-11-04"
   }
  ],
  "storico": {
@@ -359,6 +359,24 @@
    "metano": {
     "erogazione": "SERVITO",
     "prezzo": 1.962
+   }
+  },
+  "2026-11-05": {
+   "gasolio": {
+    "erogazione": "SELF",
+    "prezzo": 2.281
+   },
+   "benzina": {
+    "erogazione": "SELF",
+    "prezzo": 2.032
+   },
+   "gpl": {
+    "erogazione": "SERVITO",
+    "prezzo": 0.908
+   },
+   "metano": {
+    "erogazione": "SERVITO",
+    "prezzo": 1.966
    }
   }
  }
